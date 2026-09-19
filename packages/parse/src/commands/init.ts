@@ -2,22 +2,11 @@ import { existsSync } from "node:fs";
 import { mkdir, open, rm } from "node:fs/promises";
 import { basename, join } from "node:path";
 import { CLI_EXE, WORK_PATHS, cliVersion, findCli } from "../anime-studio.ts";
-import { ARTIFACT_NAME, NIGHTLY_URL, downloadTo, resolveLatestArtifact } from "../download.ts";
+import { ARTIFACT_NAME, NIGHTLY_URL, downloadTo, progressReporter, resolveLatestArtifact } from "../download.ts";
 import { log, warn } from "../log.ts";
 import { extractZip } from "../zip.ts";
 
 const ZIP_MAGIC = "PK\u0003\u0004";
-const PROGRESS_STEP = 8 * 1024 * 1024;
-
-function progressReporter(): (received: number, total: number | null) => void {
-  let reported = 0;
-  return (received, total) => {
-    if (received - reported < PROGRESS_STEP && received !== total) return;
-    reported = received;
-    const mib = (received / 1024 / 1024).toFixed(1);
-    log(total ? `  ${mib} / ${(total / 1024 / 1024).toFixed(1)} MiB` : `  ${mib} MiB`);
-  };
-}
 
 /** GitHub answers expired/missing artifacts with an HTML/JSON body; fail early instead of extracting garbage. */
 async function assertZip(zipPath: string): Promise<void> {

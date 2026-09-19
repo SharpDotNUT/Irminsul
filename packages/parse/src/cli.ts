@@ -2,9 +2,11 @@
 import { readFileSync } from "node:fs";
 import { CLI_EXE } from "./anime-studio.ts";
 import { buildMapCommand } from "./commands/build_map.ts";
+import { emojiCommand } from "./commands/emoji.ts";
 import { exportCommand } from "./commands/export.ts";
 import { initCommand } from "./commands/init.ts";
 import { WORK_DIR_ENV, WORK_DIR_NAME, resolveWorkDir, type Context } from "./context.ts";
+import { TEXT_MAP_LANGS, resolveLangs } from "./emoji.ts";
 import { GENSHIN_DIR_ENV } from "./genshin.ts";
 import { setSilent } from "./log.ts";
 import { rules } from "./rules.ts";
@@ -108,6 +110,17 @@ const COMMANDS: Record<string, CommandSpec> = {
       });
     },
   },
+  emoji: {
+    summary: "下载并合并 Dimbreath 两份表情 Config Data，另出每语言一份的 hash 文案表",
+    usage: "parse emoji [--lang <语言[,语言]>] [--out <目录>] [--force]",
+    flags: { lang: "value", out: "value", force: "bool" },
+    run: (ctx, flags) =>
+      emojiCommand(ctx, {
+        langs: resolveLangs(flagValues(flags, "lang")),
+        out: flags.get("out")?.at(-1),
+        force: flags.has("force"),
+      }),
+  },
 };
 
 function printUsage(command?: string): void {
@@ -138,12 +151,16 @@ function printUsage(command?: string): void {
       "  parse build_map",
       "  parse export --out D:\\out",
       "  parse export --group logo --pattern '^UI_ItemIcon_1\\d+$'",
+      "  parse emoji --lang CHS,EN",
       "",
       "export 规则组:",
       ...Object.entries(rules.groups).map(
         ([name, group]) => `  ${name.padEnd(18)} ${group.description}`,
       ),
       `  默认全部使用: ${rules.default.join(", ")}`,
+      "",
+      "emoji 语言 (--lang，默认全部；RU/TH 的上游分片 _0/_1 会自动合并):",
+      `  ${Object.keys(TEXT_MAP_LANGS).join(" | ")}`,
       "",
       "运行 parse <command> --help 查看单个命令的选项。",
     );

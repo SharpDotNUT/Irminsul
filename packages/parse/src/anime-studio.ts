@@ -9,6 +9,10 @@ export const WORK_PATHS = {
   mapFile: "maps/assets_map.map",
   namesFile: "names.txt",
   downloads: "downloads",
+  /** DimbreathBot/AnimeGameData 原始 JSON 缓存。 */
+  dimbreath: "dimbreath",
+  /** `parse emoji` 的产物（合并后的 config + 每语言一份文案表）。 */
+  emoji: "emoji",
 } as const;
 
 export const CLI_EXE = "AnimeStudio.CLI.exe";

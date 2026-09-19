@@ -1,6 +1,7 @@
 import { execFileSync } from "node:child_process";
 import { mkdir, open } from "node:fs/promises";
 import { dirname } from "node:path";
+import { log } from "./log.ts";
 
 export const ARTIFACT_REPO = "Escartem/AnimeStudio";
 export const ARTIFACT_NAME = "AnimeStudio-net10";
@@ -85,6 +86,19 @@ async function openStream(url: string, token?: string): Promise<Response> {
   return initial;
 }
 
+const PROGRESS_STEP = 8 * 1024 * 1024;
+
+/** Throttled MiB progress lines for `downloadTo`. */
+export function progressReporter(): (received: number, total: number | null) => void {
+  let reported = 0;
+  return (received, total) => {
+    if (received - reported < PROGRESS_STEP && received !== total) return;
+    reported = received;
+    const mib = (received / 1024 / 1024).toFixed(1);
+    log(total ? `  ${mib} / ${(total / 1024 / 1024).toFixed(1)} MiB` : `  ${mib} MiB`);
+  };
+}
+
 export async function downloadTo(
   url: string,
   dest: string,
@@ -96,7 +110,11 @@ export async function downloadTo(
   await mkdir(dirname(dest), { recursive: true });
   const handle = await open(dest, "w");
   try {
-    const total = Number(response.headers.get("content-length")) || null;
+    // gzip/br responses report the compressed content-length; the reader yields decoded bytes.
+    const total =
+      response.headers.get("content-encoding") !== null
+        ? null
+        : Number(response.headers.get("content-length")) || null;
     let received = 0;
     const reader = response.body.getReader();
     for (;;) {

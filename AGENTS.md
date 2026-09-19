@@ -2,16 +2,20 @@
 
 ## Project Overview
 
-Irminsul is a private Bun + pnpm workspace whose only package, `parse`, is a thin TypeScript CLI that wraps the
-external **AnimeStudio CLI** (`AnimeStudio.CLI.exe`, a `net10.0-windows` .NET build) to extract assets from
-Genshin Impact's AssetBundle shards:
+Irminsul is a private Bun + pnpm workspace whose only package, `parse`, is a thin TypeScript CLI with two upstream
+sources: the external **AnimeStudio CLI** (`AnimeStudio.CLI.exe`, a `net10.0-windows` .NET build) that extracts
+assets from Genshin Impact's AssetBundle shards, and the **DimbreathBot/AnimeGameData** JSON dumps used for
+localized emoji metadata:
 
 1. `parse init` — download + extract the AnimeStudio CLI build into the work dir.
 2. `parse build_map` — scan the game's `blocks/` folder and build `assets_map.map` (MessagePack index).
 3. `parse export` — resolve the map and export selected `Texture2D` assets to PNG.
+4. `parse emoji` — merge both `Emoji*ExcelConfigData` sheets into one config (texts stay hash references) and
+   write one hash→text file per language from every `TextMap_Medium*` shard (RU/TH shards merged).
 
-The wrapper adds flag ergonomics, environment-based path resolution, rule-driven asset selection and download
-fallback. Actual asset parsing is entirely the upstream binary's job — do not reimplement decoding here.
+The wrapper adds flag ergonomics, environment-based path resolution, rule-driven asset selection, JSON shape
+normalization and download fallback. Actual asset parsing is entirely the upstream binary's job — do not
+reimplement decoding here.
 
 ## Architecture & Data Flow
 
@@ -20,12 +24,13 @@ Layers (strictly one direction: `cli.ts` → `commands/` → shared modules):
 | Layer | Module | Role |
 | --- | --- | --- |
 | Entry | `packages/parse/src/cli.ts` | hand-rolled flag parser, `COMMANDS` registry, `printUsage`, single try/catch → `process.exitCode = 1` |
-| Commands | `src/commands/{init,build_map,export}.ts` | `xxxCommand(ctx, options)` → `Promise<void>`; argv assembly for the upstream binary |
+| Commands | `src/commands/{init,build_map,export,emoji}.ts` | `xxxCommand(ctx, options)` → `Promise<void>`; argv assembly for the upstream binary |
 | Paths | `src/context.ts` | `Context {workDir, game, silent}`, `resolveWorkDir` (`--work-dir` > `PARSE_WORK_DIR` > `<project root>/.parse`) |
 | Inputs | `src/genshin.ts` | `resolveScanRoot` (`--input` > `GENSHIN_DIR`) → the `blocks` folder or a single `.blk` |
 | Exec | `src/anime-studio.ts` | `WORK_PATHS`, `findCli`, `cliVersion`, `runCli` (win32 guard) |
-| Init only | `src/download.ts`, `src/zip.ts` | streamed download (+ GitHub Artifacts fallback), dependency-free zip extractor |
+| Init / emoji | `src/download.ts`, `src/zip.ts` | streamed download + `progressReporter` (+ GitHub Artifacts fallback), dependency-free zip extractor |
 | Export only | `src/rules.ts` + `src/rules.json` | named regex groups → `patternsForGroups` |
+| Emoji only | `src/emoji.ts` | DimbreathBot URLs + `mergeConfigData`/`mergeTextMaps`/`buildTexts` (config merge, container/field-name drift, RU/TH shard merge, per-language split) |
 | Logging | `src/log.ts` | `log` (suppressed by `--silent`), `warn` (never suppressed) |
 
 Data flow per command:
@@ -38,6 +43,12 @@ Data flow per command:
 - **export**: rule groups → regex list written to `<workDir>/names.txt` → spawn
   `<blocks> <out> --map_op AssetMap,Load --map_name <map> --types Texture2D --names names.txt --group_assets ByType --export_type Convert`
   → `<out>/Texture2D/*.png`.
+- **emoji**: both `ExcelBinOutput` sheets + every `TextMap_Medium<suffix>` shard (raw.githubusercontent `main`;
+  RU = `RU_0`+`RU_1`, TH = `TH_0`+`TH_1`) → `<workDir>/dimbreath/` (raw cache; `--force` refetches) →
+  `mergeConfigData` folds the emoji rows into their sets (`order`-sorted) and keeps `nameTextMapHash` /
+  `contentTextMapHash` as **hash references** → `<out>/emoji.json`; each shard is parsed, filtered down to the
+  878 referenced hashes and dropped (`mergeTextMaps`, so ~350MB of input never sits in memory at once) →
+  `buildTexts` → `<out>/texts/<LANG>.json` = `{"<hash>": "文案"}` (`<out>` = `--out` or `<workDir>/emoji/`).
 
 Two upstream facts drive most of the code: reading an existing map requires the composed flag
 **`--map_op AssetMap,Load`** (`AssetMap` alone rebuilds), and map `Source` entries are absolute paths, so a map
@@ -49,8 +60,10 @@ built against a moved game folder is dead.
 - `packages/parse/src/rules.json` — export selection rules as **data** (regex groups + `default` list). Extend the
   default export set here, not in TypeScript.
 - `.parse/` — gitignored runtime work dir: `anime-studio/` (extracted CLI), `maps/assets_map.map`, `names.txt`,
-  `downloads/`. Never edit by hand; refresh the CLI with `parse init --force`, and rebuild the map only when the game
-  folder actually changed (see the warning below).
+  `downloads/`, `dimbreath/` (raw upstream emoji JSON, ~348MiB) and `emoji/` (products: `emoji.json` +
+  `texts/<LANG>.json`). Never edit by hand; refresh the CLI with `parse init --force`, rebuild the map only when the
+  game folder actually changed (see the warning below), and refetch the Dimbreath JSON with `parse emoji --force`
+  (its cache is only as fresh as the last run).
 
 > **`assets_map.map` is an expensive cache — do not delete or rebuild it casually.** A full `build_map` reads every
 > `.blk` in the game folder (1925 files / ~54 GB ⇒ ~8 min on this machine, and hours on larger installs). During
@@ -75,6 +88,7 @@ pnpm parse build_map                           # full game scan (~8 min, 1925 bl
 pnpm parse build_map --input '<blocks>/00'     # subset scan (fast iteration)
 pnpm parse export --out out                    # default rules → out/Texture2D/*.png
 pnpm parse export --group logo --pattern '^UI_ItemIcon_1\d+$' --export-type Raw
+pnpm parse emoji                               # → .parse/emoji/{emoji.json,texts/<LANG>.json}（15 语言；首次约 350MB）
 ```
 
 Equivalent direct form: `bun run packages/parse/src/cli.ts <cmd> [flags]` (or `bun run src/cli.ts` inside
@@ -109,6 +123,7 @@ Equivalent direct form: `bun run packages/parse/src/cli.ts <cmd> [flags]` (or `b
 | `packages/parse/src/genshin.ts` | `GENSHIN_DIR` → `blocks` resolution rules (`*_Data` preference order) |
 | `packages/parse/src/anime-studio.ts` | upstream argv construction, `cwd = workDir`, win32 guard, exit-code hints |
 | `packages/parse/src/rules.json` | default export selection (3 groups: `logo`, `emotion-icon`, `emotion-tag-icon`) |
+| `packages/parse/src/emoji.ts` | DimbreathBot file/language tables (`TEXT_MAP_LANGS` 分片) + `mergeConfigData`/`mergeTextMaps`/`buildTexts` (tolerates upstream shape drift) |
 | `packages/parse/src/zip.ts` | zip64-capable extractor; traversal guard; no external `tar`/`Expand-Archive` |
 | `packages/parse/tsconfig.json` | the only tsconfig; all strictness lives here |
 | `package.json` (root) | workspace scripts `parse`, `typecheck`; `engines.bun`, `packageManager` |
@@ -145,6 +160,14 @@ Equivalent direct form: `bun run packages/parse/src/cli.ts <cmd> [flags]` (or `b
   4. Full-set expectation: exporting with the default rules from a complete map yields **890 PNGs** under
      `out/Texture2D/` — verify by file count and md5, not by rebuilding the map.
   5. Single-asset baseline: `^UI_EmotionTagIcon_46$` → md5 `83116143470252985a54a6098af1a0b2`.
+  6. `pnpm parse emoji` — no game install needed; the first run pulls every TextMap shard (~348MiB into
+     `.parse/dimbreath/`, ~47s here), later runs reuse the cache (~5s; `--force` refetches). Expect `15 种语言`,
+     `51 个表情包 / 827 个表情`, `877/878 条文案` per language (RU/TH each merge two disjoint shards), an
+     `.parse/emoji/emoji.json` identical to a hand merge of the two sheets, and `.parse/emoji/texts/<LANG>.json`
+     (24–38KB each) identical to a hand join over the referenced hashes (13,155 of 13,170 hash×language pairs
+     resolve). `TextMap_Medium*` is a lossy subset: `UI_EmotionTagIcon_51`'s name hash `4108338941` is absent from
+     all of them (it exists in the full `TextMapEN.json`), so it is missing from every `texts/*.json` and warns —
+     upstream data, not a bug.
 - Symptoms that look like bugs but are not: filters matching nothing make the upstream binary throw
   `IndexOutOfRangeException`; upstream does not split comma-separated `--types` (the wrapper emits one flag per
   type); in PowerShell `--map_op AssetMap,Load` needs quoting.
