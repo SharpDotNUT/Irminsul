@@ -1,0 +1,17 @@
+{
+  "groups": {
+    "logo": {
+      "description": "客户端标题 LOGO：CHS/CHT/ENG/JPN/KOR 五种语言，_Pure 为去背透明版",
+      "patterns": ["^Logo_(CHS|CHT|ENG|JPN|KOR)(_Pure)?$"]
+    },
+    "emotion-icon": {
+      "description": "表情图片本体：UI_EmotionIcon1..UI_EmotionIcon827，外加新增按钮 UI_EmotionIcon_Add",
+      "patterns": ["^UI_EmotionIcon_Add$", "^UI_EmotionIcon\\d+$"]
+    },
+    "emotion-tag-icon": {
+      "description": "表情标签角标：UI_EmotionTagIcon_00..UI_EmotionTagIcon_51",
+      "patterns": ["^UI_EmotionTagIcon_\\d+$"]
+    }
+  },
+  "default": ["logo", "emotion-icon", "emotion-tag-icon"]
+}

@@ -1,0 +1,17 @@
+{
+  "name": "parse",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "parse": "./src/cli.ts"
+  },
+  "scripts": {
+    "parse": "bun run src/cli.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^24.9.2",
+    "typescript": "^5.9.3"
+  }
+}
