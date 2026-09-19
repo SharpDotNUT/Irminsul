@@ -1,3 +1,5 @@
 node_modules/
 *.tsbuildinfo
 .parse/
+.env
+.env.*
