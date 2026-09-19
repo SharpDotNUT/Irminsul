@@ -67,6 +67,8 @@ built against a moved game folder is dead.
 - `packages/akasha/src/` — all source; one file per subcommand under `src/commands/`, shared modules at `src/` root.
 - `packages/akasha/src/rules.json` — export selection rules as **data** (regex groups + `default` list). Extend the
   default export set here, not in TypeScript.
+- `README.md`（根）与 `packages/akasha/README.md` — 面向使用者的说明（快速开始、逐命令参数、产物路径与远端布局）；
+  本文件则是给 agent/协作者的约定，两者分工、不互相重复。
 - `.parse/` — gitignored runtime work dir: `anime-studio/` (extracted CLI), `maps/assets_map.map`, `names.txt`,
   `downloads/`, `export/` (`akasha export` 的 PNG 产物，upload 的来源), `dimbreath/` (raw upstream emoji JSON,
   ~348MiB) and `emoji/` (products: `emoji.json` + `texts/<LANG>.json`). The name (and `PARSE_WORK_DIR`) is
