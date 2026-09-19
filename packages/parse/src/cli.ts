@@ -5,6 +5,7 @@ import { buildMapCommand } from "./commands/build_map.ts";
 import { emojiCommand } from "./commands/emoji.ts";
 import { exportCommand } from "./commands/export.ts";
 import { initCommand } from "./commands/init.ts";
+import { uploadCommand } from "./commands/upload.ts";
 import { WORK_DIR_ENV, WORK_DIR_NAME, resolveWorkDir, type Context } from "./context.ts";
 import { TEXT_MAP_LANGS, resolveLangs } from "./emoji.ts";
 import { GENSHIN_DIR_ENV } from "./genshin.ts";
@@ -121,6 +122,18 @@ const COMMANDS: Record<string, CommandSpec> = {
         force: flags.has("force"),
       }),
   },
+  upload: {
+    summary: "上传 emoji 产物（formatted）与贴图（binary）到对象存储",
+    usage: "parse upload [--emoji <dir>] [--images <dir>] [--prefix <前缀>] [--force]",
+    flags: { emoji: "value", images: "value", prefix: "value", force: "bool" },
+    run: (ctx, flags) =>
+      uploadCommand(ctx, {
+        emojiDir: flags.get("emoji")?.at(-1),
+        imagesDir: flags.get("images")?.at(-1),
+        prefix: flags.get("prefix")?.at(-1) ?? "Static/GI",
+        force: flags.has("force"),
+      }),
+  },
 };
 
 function printUsage(command?: string): void {
@@ -145,6 +158,8 @@ function printUsage(command?: string): void {
       `  ${WORK_DIR_ENV}  工作目录，默认 项目根/${WORK_DIR_NAME}（已 gitignore）`,
       "                   CLI 本体、assets_map.map、names.txt 都在这里",
       `                   当前: ${resolveWorkDir()}`,
+      "  R2_ACCESS_KEY_ID / R2_SECRET_ACCESS_KEY / R2_BUCKET_NAME / R2_ENDPOINT",
+      "                   upload 的 Cloudflare R2 配置（写进项目根 .env）",
       "",
       "示例:",
       "  parse init",
@@ -152,6 +167,7 @@ function printUsage(command?: string): void {
       "  parse export --out D:\\out",
       "  parse export --group logo --pattern '^UI_ItemIcon_1\\d+$'",
       "  parse emoji --lang CHS,EN",
+      "  parse upload",
       "",
       "export 规则组:",
       ...Object.entries(rules.groups).map(

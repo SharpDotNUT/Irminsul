@@ -12,10 +12,12 @@ localized emoji metadata:
 3. `parse export` — resolve the map and export selected `Texture2D` assets to PNG.
 4. `parse emoji` — merge both `Emoji*ExcelConfigData` sheets into one config (texts stay hash references) and
    write one hash→text file per language from every `TextMap_Medium*` shard (RU/TH shards merged).
+5. `parse upload` — push those products plus the exported emoji PNGs to Cloudflare R2 under `Static/GI/`, split
+   into `formatted/` (JSON/text) and `binary/` (images), skipping objects already there with the same size.
 
 The wrapper adds flag ergonomics, environment-based path resolution, rule-driven asset selection, JSON shape
-normalization and download fallback. Actual asset parsing is entirely the upstream binary's job — do not
-reimplement decoding here.
+normalization, download fallback and an R2 upload step. Actual asset parsing is entirely the upstream binary's
+job — do not reimplement decoding here.
 
 ## Architecture & Data Flow
 
@@ -31,6 +33,7 @@ Layers (strictly one direction: `cli.ts` → `commands/` → shared modules):
 | Download / zip | `src/download.ts`, `src/zip.ts` | generic `downloadTo` + `progressReporter` + `downloadCached` + `resolveArtifact`, zip magic check + dependency-free zip extractor |
 | Export only | `src/rules.ts` + `src/rules.json` | named regex groups → `patternsForGroups` |
 | Emoji only | `src/emoji.ts` | DimbreathBot URLs + `mergeConfigData`/`mergeTextMaps`/`buildTexts` (config merge, container/field-name drift, RU/TH shard merge, per-language split) |
+| Upload | `src/s3.ts` | `Bun.S3Client` facade: `R2_*` env config, paged prefix listing, single-file upload (`Content-Type` from the extension) |
 | Logging | `src/log.ts` | `log` (suppressed by `--silent`), `warn` (never suppressed) |
 
 Data flow per command:
@@ -49,6 +52,9 @@ Data flow per command:
   `contentTextMapHash` as **hash references** → `<out>/emoji.json`; each shard is parsed, filtered down to the
   878 referenced hashes and dropped (`mergeTextMaps`, so ~350MB of input never sits in memory at once) →
   `buildTexts` → `<out>/texts/<LANG>.json` = `{"<hash>": "文案"}` (`<out>` = `--out` or `<workDir>/emoji/`).
+- **upload**: `<emojiDir>` (`--emoji` or `<workDir>/emoji`) → `Static/GI/formatted/**`, `<imagesDir>` (`--images`,
+  default `export`, same default as `parse export`) walking every file recursively → `Static/GI/binary/**`; the
+  whole `Static/GI/` prefix is listed once up front and objects whose size already matches are skipped.
 
 Two upstream facts drive most of the code: reading an existing map requires the composed flag
 **`--map_op AssetMap,Load`** (`AssetMap` alone rebuilds), and map `Source` entries are absolute paths, so a map
@@ -89,6 +95,7 @@ pnpm parse build_map --input '<blocks>/00'     # subset scan (fast iteration)
 pnpm parse export --out out                    # default rules → out/Texture2D/*.png
 pnpm parse export --group logo --pattern '^UI_ItemIcon_1\d+$' --export-type Raw
 pnpm parse emoji                               # → .parse/emoji/{emoji.json,texts/<LANG>.json}（15 语言；首次约 350MB）
+pnpm parse upload                              # emoji 产物 + 贴图目录 → R2 Static/GI/{formatted,binary}/（按前缀跳过已存在）
 ```
 
 Equivalent direct form: `bun run packages/parse/src/cli.ts <cmd> [flags]` (or `bun run src/cli.ts` inside
@@ -125,15 +132,18 @@ Equivalent direct form: `bun run packages/parse/src/cli.ts <cmd> [flags]` (or `b
 | `packages/parse/src/rules.json` | default export selection (3 groups: `logo`, `emotion-icon`, `emotion-tag-icon`) |
 | `packages/parse/src/emoji.ts` | DimbreathBot file/language tables (`TEXT_MAP_LANGS` 分片) + `mergeConfigData`/`mergeTextMaps`/`buildTexts` (tolerates upstream shape drift) |
 | `packages/parse/src/zip.ts` | zip64-capable extractor + `assertZipFile` magic check; traversal guard; no external `tar`/`Expand-Archive` |
+| `packages/parse/src/s3.ts` | `parse upload` 的通道：`createS3()` 读 `R2_*` 环境变量 → 分页 `listKeys` + `upload`；只声明用到的 `Bun.S3Client` 表面（tsconfig 无 bun-types） |
 | `packages/parse/tsconfig.json` | the only tsconfig; all strictness lives here |
 | `package.json` (root) | workspace scripts `parse`, `typecheck`; `engines.bun`, `packageManager` |
-| `.env` | local `GENSHIN_DIR`; Bun auto-loads it for `bun run`/`bun` invocations |
+| `.env` | local `GENSHIN_DIR` + `R2_*` upload config; Bun auto-loads it for `bun run`/`bun` invocations |
 | `.agent/skills/anime-studio-assetmap-export/SKILL.md` | upstream `--map_op`/filter semantics and pitfalls |
 
 ## Runtime/Tooling Preferences
 
 - **Bun ≥ 1.3.14 is the runtime** (`engines.bun`); sources execute unmodified from `src/` — `bin.parse` points at
   `./src/cli.ts` and `noEmit` forbids a `dist/`. pnpm 11.5.0 is install-only.
+- Object storage goes through Bun's built-in `Bun.S3Client` (`src/s3.ts`) — no AWS SDK dependency; the missing Bun
+  types are declared locally there instead of relaxing `types: ["node"]`.
 - TypeScript config is deliberate: `module: "Preserve"` + `moduleResolution: "bundler"` +
   `allowImportingTsExtensions` (paired with `noEmit`), `verbatimModuleSyntax`, `types: ["node"]` only — no DOM lib.
 - Strictness is enforced: `strict`, `noUnusedLocals`, `noUnusedParameters`, `noImplicitOverride`,
@@ -168,6 +178,8 @@ Equivalent direct form: `bun run packages/parse/src/cli.ts <cmd> [flags]` (or `b
      resolve). `TextMap_Medium*` is a lossy subset: `UI_EmotionTagIcon_51`'s name hash `4108338941` is absent from
      all of them (it exists in the full `TextMapEN.json`), so it is missing from every `texts/*.json` and warns —
      upstream data, not a bug.
+  7. `pnpm parse upload` — needs the `R2_*` vars; expect ~892 objects (`emoji.json` + 15 texts + 876 PNGs) under
+     `Static/GI/{formatted,binary}/`, an immediate second run uploading 0, and `--force` re-sending everything.
 - Symptoms that look like bugs but are not: filters matching nothing make the upstream binary throw
   `IndexOutOfRangeException`; upstream does not split comma-separated `--types` (the wrapper emits one flag per
   type); in PowerShell `--map_op AssetMap,Load` needs quoting.
