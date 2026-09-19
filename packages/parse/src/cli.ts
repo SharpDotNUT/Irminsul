@@ -80,7 +80,7 @@ const COMMANDS: Record<string, CommandSpec> = {
     },
   },
   export: {
-    summary: "从 assets_map.map 精确导出 Texture2D 为 PNG",
+    summary: "从 assets_map.map 精确导出 Texture2D 为 PNG（默认 -> 工作目录的 export/）",
     usage:
       "parse export [--out <dir>] [--map <map>] [--group <name>] [--pattern <regex>] [--all]\n" +
       "             [--types <Type[,Type]>] [--export-type Convert|Raw|Dump|JSON]\n" +
@@ -123,7 +123,7 @@ const COMMANDS: Record<string, CommandSpec> = {
       }),
   },
   upload: {
-    summary: "上传 emoji 产物（formatted）与贴图（binary）到对象存储",
+    summary: "上传 emoji 产物（formatted）与贴图（binary，默认取工作目录的 export/）到对象存储",
     usage: "parse upload [--emoji <dir>] [--images <dir>] [--prefix <前缀>] [--force]",
     flags: { emoji: "value", images: "value", prefix: "value", force: "bool" },
     run: (ctx, flags) =>

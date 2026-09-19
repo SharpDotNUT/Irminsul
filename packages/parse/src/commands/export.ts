@@ -9,6 +9,7 @@ import { patternsForGroups, rules } from "../rules.ts";
 
 export type ExportOptions = {
   input?: string;
+  /** 导出目录，默认 `<workDir>/export`（即 `parse upload --images` 的默认取值）。 */
   out?: string;
   map?: string;
   /** Named rule groups; defaults to every group in `rules.json`. */
@@ -39,11 +40,10 @@ export async function exportCommand(ctx: Context, options: ExportOptions): Promi
     throw new Error(`asset map 不存在: ${mapFile}\n先运行: parse build_map`);
   }
 
+  const outArg = resolve(options.out ?? join(ctx.workDir, WORK_PATHS.export));
   let namesArgs: string[] = [];
-  let outArg: string;
   if (options.all) {
     log("已指定 --all：导出 map 中全部 Texture2D");
-    outArg = resolve(options.out ?? "export");
   } else {
     const groups = options.groups.length > 0 ? options.groups : rules.default;
     const patterns = [...patternsForGroups(groups), ...options.patterns];
@@ -58,7 +58,6 @@ export async function exportCommand(ctx: Context, options: ExportOptions): Promi
     const namesFile = join(ctx.workDir, WORK_PATHS.namesFile);
     await writeFile(namesFile, `${patterns.join("\n")}\n`);
     namesArgs = ["--names", namesFile];
-    outArg = resolve(options.out ?? "export");
   }
 
   const args = [

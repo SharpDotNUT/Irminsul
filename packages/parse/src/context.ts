@@ -12,6 +12,8 @@ export const WORK_PATHS = {
   maps: "maps",
   mapFile: "maps/assets_map.map",
   namesFile: "names.txt",
+  /** `parse export` 的默认输出目录（可复用产物，不要随意删除或重导）。 */
+  export: "export",
   downloads: "downloads",
   /** DimbreathBot/AnimeGameData 原始 JSON 缓存。 */
   dimbreath: "dimbreath",
