@@ -1,0 +1,153 @@
+# Repository Guidelines
+
+## Project Overview
+
+Irminsul is a private Bun + pnpm workspace whose only package, `parse`, is a thin TypeScript CLI that wraps the
+external **AnimeStudio CLI** (`AnimeStudio.CLI.exe`, a `net10.0-windows` .NET build) to extract assets from
+Genshin Impact's AssetBundle shards:
+
+1. `parse init` — download + extract the AnimeStudio CLI build into the work dir.
+2. `parse build_map` — scan the game's `blocks/` folder and build `assets_map.map` (MessagePack index).
+3. `parse export` — resolve the map and export selected `Texture2D` assets to PNG.
+
+The wrapper adds flag ergonomics, environment-based path resolution, rule-driven asset selection and download
+fallback. Actual asset parsing is entirely the upstream binary's job — do not reimplement decoding here.
+
+## Architecture & Data Flow
+
+Layers (strictly one direction: `cli.ts` → `commands/` → shared modules):
+
+| Layer | Module | Role |
+| --- | --- | --- |
+| Entry | `packages/parse/src/cli.ts` | hand-rolled flag parser, `COMMANDS` registry, `printUsage`, single try/catch → `process.exitCode = 1` |
+| Commands | `src/commands/{init,build_map,export}.ts` | `xxxCommand(ctx, options)` → `Promise<void>`; argv assembly for the upstream binary |
+| Paths | `src/context.ts` | `Context {workDir, game, silent}`, `resolveWorkDir` (`--work-dir` > `PARSE_WORK_DIR` > `<project root>/.parse`) |
+| Inputs | `src/genshin.ts` | `resolveScanRoot` (`--input` > `GENSHIN_DIR`) → the `blocks` folder or a single `.blk` |
+| Exec | `src/anime-studio.ts` | `WORK_PATHS`, `findCli`, `cliVersion`, `runCli` (win32 guard) |
+| Init only | `src/download.ts`, `src/zip.ts` | streamed download (+ GitHub Artifacts fallback), dependency-free zip extractor |
+| Export only | `src/rules.ts` + `src/rules.json` | named regex groups → `patternsForGroups` |
+| Logging | `src/log.ts` | `log` (suppressed by `--silent`), `warn` (never suppressed) |
+
+Data flow per command:
+
+- **init**: nightly.link URL → on failure resolve the latest successful `master` GitHub Actions run's
+  `AnimeStudio-net10` artifact (needs `GITHUB_TOKEN`/`GH_TOKEN`/`gh auth`) → PK magic check → `extractZip`
+  (strips the artifact's single root folder) → `<workDir>/anime-studio/`.
+- **build_map**: `resolveScanRoot` → spawn `<blocks> maps --game GI --map_op AssetMap --map_type MessagePack --types <T>…`
+  with `cwd = workDir` → `<workDir>/maps/assets_map.map`.
+- **export**: rule groups → regex list written to `<workDir>/names.txt` → spawn
+  `<blocks> <out> --map_op AssetMap,Load --map_name <map> --types Texture2D --names names.txt --group_assets ByType --export_type Convert`
+  → `<out>/Texture2D/*.png`.
+
+Two upstream facts drive most of the code: reading an existing map requires the composed flag
+**`--map_op AssetMap,Load`** (`AssetMap` alone rebuilds), and map `Source` entries are absolute paths, so a map
+built against a moved game folder is dead.
+
+## Key Directories
+
+- `packages/parse/src/` — all source; one file per subcommand under `src/commands/`, shared modules at `src/` root.
+- `packages/parse/src/rules.json` — export selection rules as **data** (regex groups + `default` list). Extend the
+  default export set here, not in TypeScript.
+- `.parse/` — gitignored runtime work dir: `anime-studio/` (extracted CLI), `maps/assets_map.map`, `names.txt`,
+  `downloads/`. Never edit by hand; refresh the CLI with `parse init --force`, and rebuild the map only when the game
+  folder actually changed (see the warning below).
+
+> **`assets_map.map` is an expensive cache — do not delete or rebuild it casually.** A full `build_map` reads every
+> `.blk` in the game folder (1925 files / ~54 GB ⇒ ~8 min on this machine, and hours on larger installs). During
+> development: keep `.parse/maps/assets_map.map` in place, run `parse export` against it (seconds, no rescan) to
+> exercise changes, and when a fresh index really is needed build a subset with
+> `parse build_map --input '<blocks>/00'` (or a single `.blk`) instead of rescanning everything. Never treat deleting
+> `.parse/` or re-running `build_map` as a routine "clean" step; note that widening `--types`, changing the game
+> folder, or moving the install invalidates the cached `Source` paths and forces a full rebuild.
+
+- `.agent/skills/anime-studio-assetmap-export/SKILL.md` — upstream CLI semantics, tested pitfalls and a known-good
+  md5 baseline. Its absolute paths predate the `.parse/` layout; treat the flags as authoritative, the paths as stale.
+
+## Development Commands
+
+```bash
+pnpm install                                   # workspace install (pnpm@11.5.0 pin)
+pnpm typecheck                                 # pnpm -r typecheck → tsc --noEmit — the only automated gate
+pnpm parse --help                              # command list, env vars, rule groups
+pnpm parse <cmd> --help                        # per-command flags
+pnpm parse init                                # download/extract AnimeStudio CLI (idempotent; --force to refresh)
+pnpm parse build_map                           # full game scan (~8 min, 1925 blk / 54 GB) — reuse this map, do not rebuild casually
+pnpm parse build_map --input '<blocks>/00'     # subset scan (fast iteration)
+pnpm parse export --out out                    # default rules → out/Texture2D/*.png
+pnpm parse export --group logo --pattern '^UI_ItemIcon_1\d+$' --export-type Raw
+```
+
+Equivalent direct form: `bun run packages/parse/src/cli.ts <cmd> [flags]` (or `bun run src/cli.ts` inside
+`packages/parse`). There is **no build, test, lint or format script** — do not introduce a bundler or transpile step.
+
+## Code Conventions & Common Patterns
+
+- **ESM + explicit extensions**: `import { x } from "./mod.ts"`, `import type { … }`; always use `node:` prefixes.
+- **Language split**: identifiers, comments and file names are English; every user-facing string (help, logs,
+  errors, `rules.json` descriptions) is Chinese.
+- **Errors**: `throw new Error("<what went wrong>，<actionable next step>")` (e.g. `请先运行: parse init`). Only
+  `main()` catches, printing `error: <message>` and setting exit code 1. Never swallow; never `process.exit()`.
+- **Flags**: register in `COMMANDS[cmd].flags` as `value`/`bool`; long-form only; bool flags must not take a value;
+  repeated value flags accumulate; comma-separated lists are split by `flagValues`; string enums are
+  `Record<string, true>` allowlists validated by `pickEnum` (no TS `enum`).
+- **Async**: `async`/`await` only; child-process completion via `Promise.withResolvers<T>()` with `error` + `close`
+  handlers (`anime-studio.ts`).
+- **No micro-helpers**: one-expression wrappers are inlined; extract a named function only when three or more call
+  sites need identical behavior. No generic `utils.ts`.
+- **Types as documentation**: `type` aliases over interfaces, `as const` path/flag maps (`WORK_PATHS`), explicit
+  `unknown` + runtime shape checks at trust boundaries (`cli.ts` reading its own `package.json`).
+- **Logging**: `log`/`warn` from `src/log.ts`; pass `--silent` through to the upstream binary when `ctx.silent`.
+- **Preflight over crash**: existence checks with actionable messages (`findCli`, missing map, missing blocks dir).
+- Keep the wrapper thin: new upstream behaviour = new flag passthrough, not re-implementation.
+
+## Important Files
+
+| Path | Why it matters |
+| --- | --- |
+| `packages/parse/src/cli.ts` | single source of the CLI surface (commands, flags, enums, help text, error handling) |
+| `packages/parse/src/context.ts` | work-dir contract; `projectRoot()` walks up for `pnpm-workspace.yaml` |
+| `packages/parse/src/genshin.ts` | `GENSHIN_DIR` → `blocks` resolution rules (`*_Data` preference order) |
+| `packages/parse/src/anime-studio.ts` | upstream argv construction, `cwd = workDir`, win32 guard, exit-code hints |
+| `packages/parse/src/rules.json` | default export selection (3 groups: `logo`, `emotion-icon`, `emotion-tag-icon`) |
+| `packages/parse/src/zip.ts` | zip64-capable extractor; traversal guard; no external `tar`/`Expand-Archive` |
+| `packages/parse/tsconfig.json` | the only tsconfig; all strictness lives here |
+| `package.json` (root) | workspace scripts `parse`, `typecheck`; `engines.bun`, `packageManager` |
+| `.env` | local `GENSHIN_DIR`; Bun auto-loads it for `bun run`/`bun` invocations |
+| `.agent/skills/anime-studio-assetmap-export/SKILL.md` | upstream `--map_op`/filter semantics and pitfalls |
+
+## Runtime/Tooling Preferences
+
+- **Bun ≥ 1.3.14 is the runtime** (`engines.bun`); sources execute unmodified from `src/` — `bin.parse` points at
+  `./src/cli.ts` and `noEmit` forbids a `dist/`. pnpm 11.5.0 is install-only.
+- TypeScript config is deliberate: `module: "Preserve"` + `moduleResolution: "bundler"` +
+  `allowImportingTsExtensions` (paired with `noEmit`), `verbatimModuleSyntax`, `types: ["node"]` only — no DOM lib.
+- Strictness is enforced: `strict`, `noUnusedLocals`, `noUnusedParameters`, `noImplicitOverride`,
+  `noFallthroughCasesInSwitch`. Dead code fails `pnpm typecheck`.
+- **Windows-only at runtime**: `runCli` rejects any non-`win32` platform (native SkiaSharp dependency). Pure logic
+  (path resolution, rules, zip parsing) is platform-agnostic and testable anywhere.
+- `GENSHIN_DIR` (or `--input`) is mandatory for `build_map`/`export`; `.env` provides it locally and is
+  **not** covered by `.gitignore` — keep machine paths/secrets out of it if the repo is shared.
+- `.gitattributes` forces `text=utf-8 eol=lf`; keep LF on all text files (including `.ts`, `.json`, `.md`).
+- Never hand-edit `.parse/`, and never delete it to "start clean": the extracted CLI and especially
+  `maps/assets_map.map` are reusable caches that cost a full game rescan to recreate.
+
+## Testing & QA
+
+- **There is no test suite, no runner config, no CI, and no lint/format tooling.** The single automated check is
+  `pnpm typecheck` (or `cd packages/parse && tsc --noEmit`).
+- Manual smoke procedure (Windows + real game install + `parse init` already done):
+  1. `pnpm parse --help` / `--version` — no external dependencies.
+  2. `pnpm parse export --group logo --out out` against the **existing** `.parse/maps/assets_map.map` — this is the
+     normal verification loop (seconds, no rescan).
+  3. Only when the map itself is the subject of the change: `pnpm parse build_map --input '<blocks>/00'` into a
+     throwaway `--work-dir` (e.g. `--work-dir .parse/tmp-subset`, delete that dir afterwards) instead of overwriting
+     the shared map.
+  4. Full-set expectation: exporting with the default rules from a complete map yields **890 PNGs** under
+     `out/Texture2D/` — verify by file count and md5, not by rebuilding the map.
+  5. Single-asset baseline: `^UI_EmotionTagIcon_46$` → md5 `83116143470252985a54a6098af1a0b2`.
+- Symptoms that look like bugs but are not: filters matching nothing make the upstream binary throw
+  `IndexOutOfRangeException`; upstream does not split comma-separated `--types` (the wrapper emits one flag per
+  type); in PowerShell `--map_op AssetMap,Load` needs quoting.
+- If tests are ever added: `bun test` fits the mandated runtime, but keep them hermetic — no `GENSHIN_DIR`, no
+  downloaded exe. Only pure modules (`zip.ts`, `genshin.ts` resolution, `rules.ts`) are worth unit tests; the
+  external-binary paths stay manual smoke checks.
