@@ -11,6 +11,8 @@ const SIG_LOCAL = 0x04034b50;
 const U32_SENTINEL = 0xffffffff;
 const U16_SENTINEL = 0xffff;
 const EOCD_MIN_SIZE = 22;
+/** Local file header signature, as it appears on disk. */
+const ZIP_MAGIC = "PK\u0003\u0004";
 
 type ZipEntry = {
   name: string;
@@ -176,6 +178,20 @@ async function localDataOffset(fh: FileHandle, localOffset: number): Promise<num
   const header = await readExact(fh, 30, localOffset, "本地文件头");
   if (header.readUInt32LE(0) !== SIG_LOCAL) throw new Error(`本地文件头损坏 @${localOffset}`);
   return localOffset + 30 + header.readUInt16LE(26) + header.readUInt16LE(28);
+}
+
+/** Error pages get saved with a `.zip` name; fail on the magic instead of extracting garbage. */
+export async function assertZipFile(zipPath: string): Promise<void> {
+  const handle = await open(zipPath, "r");
+  try {
+    const header = Buffer.alloc(ZIP_MAGIC.length);
+    await handle.read(header, 0, header.length, 0);
+    if (header.toString("latin1") !== ZIP_MAGIC) {
+      throw new Error(`${zipPath} 不是 zip 文件（下载内容可能是一个错误页）`);
+    }
+  } finally {
+    await handle.close();
+  }
 }
 
 /**

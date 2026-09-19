@@ -6,6 +6,19 @@ export const WORK_DIR_ENV = "PARSE_WORK_DIR";
 /** Folder name, relative to the project root, holding the CLI build, the asset map and names.txt. */
 export const WORK_DIR_NAME = ".parse";
 
+/** Paths inside the work dir, relative to its root. */
+export const WORK_PATHS = {
+  animeStudio: "anime-studio",
+  maps: "maps",
+  mapFile: "maps/assets_map.map",
+  namesFile: "names.txt",
+  downloads: "downloads",
+  /** DimbreathBot/AnimeGameData 原始 JSON 缓存。 */
+  dimbreath: "dimbreath",
+  /** `parse emoji` 的产物（合并后的 config + 每语言一份文案表）。 */
+  emoji: "emoji",
+} as const;
+
 export type Context = {
   /** Directory holding the extracted CLI, the asset map and generated rule lists. */
   workDir: string;

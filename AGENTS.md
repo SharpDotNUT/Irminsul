@@ -25,19 +25,19 @@ Layers (strictly one direction: `cli.ts` → `commands/` → shared modules):
 | --- | --- | --- |
 | Entry | `packages/parse/src/cli.ts` | hand-rolled flag parser, `COMMANDS` registry, `printUsage`, single try/catch → `process.exitCode = 1` |
 | Commands | `src/commands/{init,build_map,export,emoji}.ts` | `xxxCommand(ctx, options)` → `Promise<void>`; argv assembly for the upstream binary |
-| Paths | `src/context.ts` | `Context {workDir, game, silent}`, `resolveWorkDir` (`--work-dir` > `PARSE_WORK_DIR` > `<project root>/.parse`) |
+| Paths | `src/context.ts` | `Context {workDir, game, silent}`, the `WORK_PATHS` work-dir layout, `resolveWorkDir` (`--work-dir` > `PARSE_WORK_DIR` > `<project root>/.parse`) |
 | Inputs | `src/genshin.ts` | `resolveScanRoot` (`--input` > `GENSHIN_DIR`) → the `blocks` folder or a single `.blk` |
-| Exec | `src/anime-studio.ts` | `WORK_PATHS`, `findCli`, `cliVersion`, `runCli` (win32 guard) |
-| Init / emoji | `src/download.ts`, `src/zip.ts` | streamed download + `progressReporter` (+ GitHub Artifacts fallback), dependency-free zip extractor |
+| Exec | `src/anime-studio.ts` | CLI acquisition (`downloadCliArchive`: nightly.link → GitHub artifact fallback), `CLI_EXE`, `findCli`, `cliVersion`, `runCli` (win32 guard) |
+| Download / zip | `src/download.ts`, `src/zip.ts` | generic `downloadTo` + `progressReporter` + `downloadCached` + `resolveArtifact`, zip magic check + dependency-free zip extractor |
 | Export only | `src/rules.ts` + `src/rules.json` | named regex groups → `patternsForGroups` |
 | Emoji only | `src/emoji.ts` | DimbreathBot URLs + `mergeConfigData`/`mergeTextMaps`/`buildTexts` (config merge, container/field-name drift, RU/TH shard merge, per-language split) |
 | Logging | `src/log.ts` | `log` (suppressed by `--silent`), `warn` (never suppressed) |
 
 Data flow per command:
 
-- **init**: nightly.link URL → on failure resolve the latest successful `master` GitHub Actions run's
-  `AnimeStudio-net10` artifact (needs `GITHUB_TOKEN`/`GH_TOKEN`/`gh auth`) → PK magic check → `extractZip`
-  (strips the artifact's single root folder) → `<workDir>/anime-studio/`.
+- **init**: `downloadCliArchive` fetches the archive → nightly.link URL, on failure the latest successful `master`
+  GitHub Actions run's `AnimeStudio-net10` artifact (needs `GITHUB_TOKEN`/`GH_TOKEN`/`gh auth`) → PK magic check
+  (`assertZipFile`) → `extractZip` (strips the artifact's single root folder) → `<workDir>/anime-studio/`.
 - **build_map**: `resolveScanRoot` → spawn `<blocks> maps --game GI --map_op AssetMap --map_type MessagePack --types <T>…`
   with `cwd = workDir` → `<workDir>/maps/assets_map.map`.
 - **export**: rule groups → regex list written to `<workDir>/names.txt` → spawn
@@ -119,12 +119,12 @@ Equivalent direct form: `bun run packages/parse/src/cli.ts <cmd> [flags]` (or `b
 | Path | Why it matters |
 | --- | --- |
 | `packages/parse/src/cli.ts` | single source of the CLI surface (commands, flags, enums, help text, error handling) |
-| `packages/parse/src/context.ts` | work-dir contract; `projectRoot()` walks up for `pnpm-workspace.yaml` |
+| `packages/parse/src/context.ts` | work-dir contract (`WORK_PATHS` layout, `projectRoot()` walks up for `pnpm-workspace.yaml`) |
 | `packages/parse/src/genshin.ts` | `GENSHIN_DIR` → `blocks` resolution rules (`*_Data` preference order) |
-| `packages/parse/src/anime-studio.ts` | upstream argv construction, `cwd = workDir`, win32 guard, exit-code hints |
+| `packages/parse/src/anime-studio.ts` | CLI acquisition (`downloadCliArchive`: nightly.link → GitHub artifact fallback), upstream argv construction, `cwd = workDir`, win32 guard, exit-code hints |
 | `packages/parse/src/rules.json` | default export selection (3 groups: `logo`, `emotion-icon`, `emotion-tag-icon`) |
 | `packages/parse/src/emoji.ts` | DimbreathBot file/language tables (`TEXT_MAP_LANGS` 分片) + `mergeConfigData`/`mergeTextMaps`/`buildTexts` (tolerates upstream shape drift) |
-| `packages/parse/src/zip.ts` | zip64-capable extractor; traversal guard; no external `tar`/`Expand-Archive` |
+| `packages/parse/src/zip.ts` | zip64-capable extractor + `assertZipFile` magic check; traversal guard; no external `tar`/`Expand-Archive` |
 | `packages/parse/tsconfig.json` | the only tsconfig; all strictness lives here |
 | `package.json` (root) | workspace scripts `parse`, `typecheck`; `engines.bun`, `packageManager` |
 | `.env` | local `GENSHIN_DIR`; Bun auto-loads it for `bun run`/`bun` invocations |

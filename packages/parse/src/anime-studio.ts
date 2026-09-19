@@ -1,21 +1,47 @@
 import { spawn } from "node:child_process";
 import { existsSync, readdirSync } from "node:fs";
-import { join } from "node:path";
-
-/** Paths inside the work dir, relative to its root. */
-export const WORK_PATHS = {
-  animeStudio: "anime-studio",
-  maps: "maps",
-  mapFile: "maps/assets_map.map",
-  namesFile: "names.txt",
-  downloads: "downloads",
-  /** DimbreathBot/AnimeGameData 原始 JSON 缓存。 */
-  dimbreath: "dimbreath",
-  /** `parse emoji` 的产物（合并后的 config + 每语言一份文案表）。 */
-  emoji: "emoji",
-} as const;
+import { basename, join } from "node:path";
+import { WORK_PATHS } from "./context.ts";
+import { downloadTo, progressReporter, resolveArtifact } from "./download.ts";
+import { log, warn } from "./log.ts";
 
 export const CLI_EXE = "AnimeStudio.CLI.exe";
+
+/** Upstream build to install: nightly.link serves the branch build, GitHub only its artifacts. */
+const CLI_ARTIFACT = {
+  repo: "Escartem/AnimeStudio",
+  branch: "master",
+  artifact: "AnimeStudio-net10",
+} as const;
+
+const CLI_NIGHTLY_URL = `https://nightly.link/${CLI_ARTIFACT.repo}/workflows/build/${CLI_ARTIFACT.branch}/${CLI_ARTIFACT.artifact}.zip`;
+
+/**
+ * Downloads the CLI archive into `<workDir>/downloads` and returns its path — verifying and
+ * extracting it is the caller's job.
+ *
+ * Falls back to the latest successful GitHub Actions run's artifact when nightly.link is down;
+ * artifact downloads are auth-only, hence the token requirement.
+ */
+export async function downloadCliArchive(workDir: string, url = CLI_NIGHTLY_URL): Promise<string> {
+  const zipPath = join(workDir, WORK_PATHS.downloads, basename(new URL(url).pathname) || "anime-studio.zip");
+
+  log(`下载 AnimeStudio: ${url}`);
+  try {
+    await downloadTo(url, zipPath, { onProgress: progressReporter() });
+  } catch (error) {
+    warn(`${url} 不可用（${(error as Error).message}）`);
+    const fallback = await resolveArtifact(CLI_ARTIFACT);
+    if (!fallback.token) {
+      throw new Error(
+        "GitHub Actions 构建产物只能通过 API 鉴权下载，请设置 GITHUB_TOKEN / GH_TOKEN，或先执行 gh auth login",
+      );
+    }
+    log(`改用 GitHub Actions run ${fallback.runId} 的 ${CLI_ARTIFACT.artifact} 产物`);
+    await downloadTo(fallback.url, zipPath, { token: fallback.token, onProgress: progressReporter() });
+  }
+  return zipPath;
+}
 
 /** Locates `AnimeStudio.CLI.exe` inside the work dir, tolerating one nesting level. */
 export function findCli(workDir: string): string {

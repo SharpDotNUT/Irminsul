@@ -1,17 +1,17 @@
 import { execFileSync } from "node:child_process";
-import { mkdir, open } from "node:fs/promises";
+import { existsSync } from "node:fs";
+import { mkdir, open, rename } from "node:fs/promises";
 import { dirname } from "node:path";
 import { log } from "./log.ts";
-
-export const ARTIFACT_REPO = "Escartem/AnimeStudio";
-export const ARTIFACT_NAME = "AnimeStudio-net10";
-export const NIGHTLY_URL = `https://nightly.link/${ARTIFACT_REPO}/workflows/build/master/${ARTIFACT_NAME}.zip`;
 
 const API_ROOT = "https://api.github.com";
 const USER_AGENT = "irminsul-parse";
 
 type WorkflowRun = { id: number; head_sha: string };
 type Artifact = { name: string; expired: boolean; archive_download_url: string };
+
+/** One GitHub Actions artifact to fall back to: repository, branch and artifact name. */
+export type ArtifactSource = { repo: string; branch: string; artifact: string };
 
 async function githubApi(path: string, token?: string): Promise<unknown> {
   const response = await fetch(`${API_ROOT}${path}`, {
@@ -28,7 +28,7 @@ async function githubApi(path: string, token?: string): Promise<unknown> {
 }
 
 /** `GITHUB_TOKEN` / `GH_TOKEN`, else the `gh` CLI login. Artifact downloads are auth-only. */
-export function githubToken(): string | undefined {
+function githubToken(): string | undefined {
   const fromEnv = process.env.GITHUB_TOKEN ?? process.env.GH_TOKEN;
   if (fromEnv) return fromEnv;
   try {
@@ -42,25 +42,27 @@ export function githubToken(): string | undefined {
   }
 }
 
-/** Latest successful `master` run's artifact, ready to download (token required by GitHub). */
-export async function resolveLatestArtifact(): Promise<{ url: string; token: string | undefined; runId: number }> {
+/** Latest successful `source.branch` run's non-expired `source.artifact`, ready to download. */
+export async function resolveArtifact(
+  source: ArtifactSource,
+): Promise<{ url: string; token: string | undefined; runId: number }> {
   const token = githubToken();
   const runs = (await githubApi(
-    `/repos/${ARTIFACT_REPO}/actions/runs?branch=master&status=success&per_page=1`,
+    `/repos/${source.repo}/actions/runs?branch=${source.branch}&status=success&per_page=1`,
     token,
   )) as { workflow_runs?: WorkflowRun[] };
   const run = runs.workflow_runs?.[0];
-  if (!run) throw new Error(`${ARTIFACT_REPO} 的 master 分支没有成功的 workflow run`);
+  if (!run) throw new Error(`${source.repo} 的 ${source.branch} 分支没有成功的 workflow run`);
 
   const artifacts = (await githubApi(
-    `/repos/${ARTIFACT_REPO}/actions/runs/${run.id}/artifacts`,
+    `/repos/${source.repo}/actions/runs/${run.id}/artifacts`,
     token,
   )) as { artifacts?: Artifact[] };
   const available = artifacts.artifacts ?? [];
-  const artifact = available.find((entry) => entry.name === ARTIFACT_NAME && !entry.expired);
+  const artifact = available.find((entry) => entry.name === source.artifact && !entry.expired);
   if (!artifact) {
     const names = available.map((entry) => entry.name).join(", ") || "(无)";
-    throw new Error(`run ${run.id} 没有可用的 ${ARTIFACT_NAME} 构建产物，现有: ${names}`);
+    throw new Error(`run ${run.id} 没有可用的 ${source.artifact} 构建产物，现有: ${names}`);
   }
   return { url: artifact.archive_download_url, token, runId: run.id };
 }
@@ -128,4 +130,16 @@ export async function downloadTo(
   } finally {
     await handle.close();
   }
+}
+
+/** 复用已下载的缓存；先写 `.part` 再改名，中断不会留下半截文件被当成有效缓存。 */
+export async function downloadCached(url: string, dest: string, force: boolean): Promise<void> {
+  if (!force && existsSync(dest)) {
+    log(`使用缓存: ${dest}（--force 可重新下载）`);
+    return;
+  }
+  log(`下载: ${url}`);
+  const part = `${dest}.part`;
+  await downloadTo(url, part, { onProgress: progressReporter() });
+  await rename(part, dest);
 }

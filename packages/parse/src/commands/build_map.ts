@@ -1,8 +1,8 @@
 import { existsSync, statSync } from "node:fs";
 import { mkdir } from "node:fs/promises";
 import { join, resolve } from "node:path";
-import { WORK_PATHS, findCli, runCli } from "../anime-studio.ts";
-import type { Context } from "../context.ts";
+import { findCli, runCli } from "../anime-studio.ts";
+import { WORK_PATHS, type Context } from "../context.ts";
 import { resolveScanRoot } from "../genshin.ts";
 import { log } from "../log.ts";
 

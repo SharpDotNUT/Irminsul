@@ -1,9 +1,7 @@
-import { existsSync } from "node:fs";
-import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { basename, join, resolve } from "node:path";
-import { WORK_PATHS } from "../anime-studio.ts";
-import type { Context } from "../context.ts";
-import { downloadTo, progressReporter } from "../download.ts";
+import { WORK_PATHS, type Context } from "../context.ts";
+import { downloadCached } from "../download.ts";
 import {
   DATA_REPO,
   EMOJI_FILE,
@@ -28,18 +26,6 @@ export type EmojiOptions = {
 
 const CONFIG_FILE = "emoji.json";
 const TEXTS_DIR = "texts";
-
-/** 先写 `.part` 再改名：中断不会留下半截文件被当成有效缓存。 */
-async function downloadCached(url: string, dest: string, force: boolean): Promise<void> {
-  if (!force && existsSync(dest)) {
-    log(`使用缓存: ${dest}（--force 可重新下载）`);
-    return;
-  }
-  log(`下载: ${url}`);
-  const part = `${dest}.part`;
-  await downloadTo(url, part, { onProgress: progressReporter() });
-  await rename(part, dest);
-}
 
 async function readJson(file: string): Promise<unknown> {
   const text = await readFile(file, "utf8");
