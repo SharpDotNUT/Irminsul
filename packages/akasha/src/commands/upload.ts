@@ -7,7 +7,7 @@ import { createS3 } from "../s3.ts";
 export type UploadOptions = {
   /** emoji 产物目录（`emoji.json` + `texts/`），默认 `<workDir>/emoji`。 */
   emojiDir?: string;
-  /** 贴图目录，默认 `<workDir>/export`（`parse export` 的默认输出目录）。 */
+  /** 贴图目录，默认 `<workDir>/export`（`akasha export` 的默认输出目录）。 */
   imagesDir?: string;
   /** 远端前缀（首尾斜杠会被去掉），默认 `Static/GI`。 */
   prefix: string;
@@ -44,12 +44,12 @@ export async function uploadCommand(ctx: Context, options: UploadOptions): Promi
     {
       dir: resolve(options.emojiDir ?? join(ctx.workDir, WORK_PATHS.emoji)),
       category: FORMATTED,
-      hint: "parse emoji",
+      hint: "akasha emoji",
     },
     {
       dir: resolve(options.imagesDir ?? join(ctx.workDir, WORK_PATHS.export)),
       category: BINARY,
-      hint: "parse export",
+      hint: "akasha export",
     },
   ];
 

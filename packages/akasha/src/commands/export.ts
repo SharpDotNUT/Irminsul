@@ -9,7 +9,7 @@ import { patternsForGroups, rules } from "../rules.ts";
 
 export type ExportOptions = {
   input?: string;
-  /** 导出目录，默认 `<workDir>/export`（即 `parse upload --images` 的默认取值）。 */
+  /** 导出目录，默认 `<workDir>/export`（即 `akasha upload --images` 的默认取值）。 */
   out?: string;
   map?: string;
   /** Named rule groups; defaults to every group in `rules.json`. */
@@ -37,7 +37,7 @@ export async function exportCommand(ctx: Context, options: ExportOptions): Promi
   const blocks = resolveScanRoot(options.input);
   const mapFile = resolve(options.map ?? join(ctx.workDir, WORK_PATHS.mapFile));
   if (!existsSync(mapFile)) {
-    throw new Error(`asset map 不存在: ${mapFile}\n先运行: parse build_map`);
+    throw new Error(`asset map 不存在: ${mapFile}\n先运行: akasha build_map`);
   }
 
   const outArg = resolve(options.out ?? join(ctx.workDir, WORK_PATHS.export));

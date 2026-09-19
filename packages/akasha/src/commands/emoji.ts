@@ -94,5 +94,5 @@ export async function emojiCommand(ctx: Context, options: EmojiOptions): Promise
     );
   }
   if (orphanSetIDs.length > 0) warn(`有表情引用了不存在的 setID: ${orphanSetIDs.join(", ")}（未写入输出）`);
-  log(`提示: 贴图用 parse export --group emotion-icon --group emotion-tag-icon 导出`);
+  log(`提示: 贴图用 akasha export --group emotion-icon --group emotion-tag-icon 导出`);
 }

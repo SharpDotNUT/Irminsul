@@ -5,7 +5,7 @@ import { dirname } from "node:path";
 import { log } from "./log.ts";
 
 const API_ROOT = "https://api.github.com";
-const USER_AGENT = "irminsul-parse";
+const USER_AGENT = "irminsul-akasha";
 
 type WorkflowRun = { id: number; head_sha: string };
 type Artifact = { name: string; expired: boolean; archive_download_url: string };

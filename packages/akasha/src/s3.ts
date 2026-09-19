@@ -1,5 +1,5 @@
 /**
- * `parse upload` 的对象存储通道：Bun 内置的 `Bun.S3Client`（R2 兼容 S3 协议）。
+ * `akasha upload` 的对象存储通道：Bun 内置的 `Bun.S3Client`（R2 兼容 S3 协议）。
  * `tsconfig` 只挂 `types: ["node"]`，所以这里声明实际用到的那点 Bun 表面，而不是引入 bun-types。
  */
 

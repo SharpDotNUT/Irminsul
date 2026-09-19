@@ -1,13 +1,13 @@
 {
-  "name": "parse",
+  "name": "@irminsul/akasha",
   "version": "0.0.0",
   "private": true,
   "type": "module",
   "bin": {
-    "parse": "./src/cli.ts"
+    "akasha": "./src/cli.ts"
   },
   "scripts": {
-    "parse": "bun run src/cli.ts",
+    "akasha": "bun run src/cli.ts",
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {

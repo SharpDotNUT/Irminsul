@@ -2,8 +2,12 @@ import { existsSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
+/** Env var overriding the work dir. */
 export const WORK_DIR_ENV = "PARSE_WORK_DIR";
-/** Folder name, relative to the project root, holding the CLI build, the asset map and names.txt. */
+/**
+ * Folder name, relative to the project root, holding the CLI build, the asset map and names.txt.
+ * Kept as `.parse` after the package rename — renaming it means moving the expensive caches inside.
+ */
 export const WORK_DIR_NAME = ".parse";
 
 /** Paths inside the work dir, relative to its root. */
@@ -12,12 +16,12 @@ export const WORK_PATHS = {
   maps: "maps",
   mapFile: "maps/assets_map.map",
   namesFile: "names.txt",
-  /** `parse export` 的默认输出目录（可复用产物，不要随意删除或重导）。 */
+  /** `akasha export` 的默认输出目录（可复用产物，不要随意删除或重导）。 */
   export: "export",
   downloads: "downloads",
   /** DimbreathBot/AnimeGameData 原始 JSON 缓存。 */
   dimbreath: "dimbreath",
-  /** `parse emoji` 的产物（合并后的 config + 每语言一份文案表）。 */
+  /** `akasha emoji` 的产物（合并后的 config + 每语言一份文案表）。 */
   emoji: "emoji",
 } as const;
 
@@ -29,9 +33,9 @@ export type Context = {
   silent: boolean;
 };
 
-/** Project root: nearest ancestor of this package carrying a `pnpm-workspace.yaml`, else `<root>/packages/parse/../..`. */
+/** Project root: nearest ancestor of this package carrying a `pnpm-workspace.yaml`, else `<root>/packages/akasha/../..`. */
 function projectRoot(): string {
-  // context.ts lives at <root>/packages/parse/src/.
+  // context.ts lives at <root>/packages/akasha/src/.
   const moduleRoot = dirname(dirname(dirname(fileURLToPath(import.meta.url))));
   let dir = moduleRoot;
   while (!existsSync(join(dir, "pnpm-workspace.yaml"))) {
@@ -45,7 +49,7 @@ function projectRoot(): string {
 /**
  * `--work-dir` > `PARSE_WORK_DIR` > `<project root>/.parse` (gitignored).
  * Deriving the default from this module keeps it independent of the current working directory,
- * so `parse` reaches the same map and CLI no matter where it is invoked from.
+ * so the CLI reaches the same map and CLI no matter where it is invoked from.
  */
 export function resolveWorkDir(explicit?: string): string {
   const raw = explicit ?? process.env[WORK_DIR_ENV];

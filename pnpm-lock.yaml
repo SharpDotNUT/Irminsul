@@ -8,7 +8,7 @@ importers:
 
   .: {}
 
-  packages/parse:
+  packages/akasha:
     devDependencies:
       '@types/node':
         specifier: ^24.9.2

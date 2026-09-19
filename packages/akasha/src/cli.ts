@@ -61,14 +61,14 @@ function pickEnum(flags: Map<string, string[]>, name: string, allowed: Record<st
 const COMMANDS: Record<string, CommandSpec> = {
   init: {
     summary: "下载并解压 AnimeStudio CLI（net10 windows 构建）",
-    usage: "parse init [--url <zip>] [--force]",
+    usage: "akasha init [--url <zip>] [--force]",
     flags: { url: "value", force: "bool" },
     run: (ctx, flags) =>
       initCommand(ctx.workDir, { url: flags.get("url")?.at(-1), force: flags.has("force") }),
   },
   build_map: {
     summary: "扫描游戏 blocks 目录，构建 assets_map.map（MessagePack）",
-    usage: "parse build_map [--input <blocks>] [--types <Type[,Type]>] [--ai-file <json>]",
+    usage: "akasha build_map [--input <blocks>] [--types <Type[,Type]>] [--ai-file <json>]",
     flags: { input: "value", types: "value", "ai-file": "value" },
     run: (ctx, flags) => {
       const types = flagValues(flags, "types");
@@ -82,7 +82,7 @@ const COMMANDS: Record<string, CommandSpec> = {
   export: {
     summary: "从 assets_map.map 精确导出 Texture2D 为 PNG（默认 -> 工作目录的 export/）",
     usage:
-      "parse export [--out <dir>] [--map <map>] [--group <name>] [--pattern <regex>] [--all]\n" +
+      "akasha export [--out <dir>] [--map <map>] [--group <name>] [--pattern <regex>] [--all]\n" +
       "             [--types <Type[,Type]>] [--export-type Convert|Raw|Dump|JSON]\n" +
       "             [--group-assets ByType|ByContainer|BySource|None] [--input <blocks>]",
     flags: {
@@ -113,7 +113,7 @@ const COMMANDS: Record<string, CommandSpec> = {
   },
   emoji: {
     summary: "下载并合并 Dimbreath 两份表情 Config Data，另出每语言一份的 hash 文案表",
-    usage: "parse emoji [--lang <语言[,语言]>] [--out <目录>] [--force]",
+    usage: "akasha emoji [--lang <语言[,语言]>] [--out <目录>] [--force]",
     flags: { lang: "value", out: "value", force: "bool" },
     run: (ctx, flags) =>
       emojiCommand(ctx, {
@@ -124,7 +124,7 @@ const COMMANDS: Record<string, CommandSpec> = {
   },
   upload: {
     summary: "上传 emoji 产物（formatted）与贴图（binary，默认取工作目录的 export/）到对象存储",
-    usage: "parse upload [--emoji <dir>] [--images <dir>] [--prefix <前缀>] [--force]",
+    usage: "akasha upload [--emoji <dir>] [--images <dir>] [--prefix <前缀>] [--force]",
     flags: { emoji: "value", images: "value", prefix: "value", force: "bool" },
     run: (ctx, flags) =>
       uploadCommand(ctx, {
@@ -148,7 +148,7 @@ function printUsage(command?: string): void {
     }
   } else {
     lines.push(
-      "parse <command> [options]",
+      "akasha <command> [options]",
       "",
       "命令:",
       ...Object.entries(COMMANDS).map(([name, spec]) => `  ${name.padEnd(10)} ${spec.summary}`),
@@ -162,12 +162,12 @@ function printUsage(command?: string): void {
       "                   upload 的 Cloudflare R2 配置（写进项目根 .env）",
       "",
       "示例:",
-      "  parse init",
-      "  parse build_map",
-      "  parse export --out D:\\out",
-      "  parse export --group logo --pattern '^UI_ItemIcon_1\\d+$'",
-      "  parse emoji --lang CHS,EN",
-      "  parse upload",
+      "  akasha init",
+      "  akasha build_map",
+      "  akasha export --out D:\\out",
+      "  akasha export --group logo --pattern '^UI_ItemIcon_1\\d+$'",
+      "  akasha emoji --lang CHS,EN",
+      "  akasha upload",
       "",
       "export 规则组:",
       ...Object.entries(rules.groups).map(
@@ -178,7 +178,7 @@ function printUsage(command?: string): void {
       "emoji 语言 (--lang，默认全部；RU/TH 的上游分片 _0/_1 会自动合并):",
       `  ${Object.keys(TEXT_MAP_LANGS).join(" | ")}`,
       "",
-      "运行 parse <command> --help 查看单个命令的选项。",
+      "运行 akasha <command> --help 查看单个命令的选项。",
     );
   }
   console.log(lines.join("\n"));

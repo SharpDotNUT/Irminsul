@@ -56,7 +56,7 @@ export function findCli(workDir: string): string {
       if (existsSync(nested)) return nested;
     }
   }
-  throw new Error(`未找到 ${CLI_EXE}（查找位置: ${root}），请先运行: parse init`);
+  throw new Error(`未找到 ${CLI_EXE}（查找位置: ${root}），请先运行: akasha init`);
 }
 
 export async function cliVersion(cli: string): Promise<string> {
