@@ -9,6 +9,8 @@
   },
   "scripts": {
     "akasha": "bun run packages/akasha/src/cli.ts",
+    "site": "pnpm --filter @irminsul/site dev",
+    "site:build": "pnpm --filter @irminsul/site build",
     "typecheck": "pnpm -r typecheck"
   }
 }

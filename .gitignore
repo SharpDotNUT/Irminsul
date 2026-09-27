@@ -1,5 +1,7 @@
 node_modules/
 *.tsbuildinfo
 .parse/
+packages/site/.nuxt/
+packages/site/.output/
 .env
 .env.*

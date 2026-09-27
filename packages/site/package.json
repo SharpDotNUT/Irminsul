@@ -1,0 +1,25 @@
+{
+  "name": "@irminsul/site",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "postinstall": "nuxt prepare",
+    "dev": "nuxt dev",
+    "build": "nuxt generate",
+    "preview": "nuxt preview",
+    "typecheck": "nuxt typecheck"
+  },
+  "dependencies": {
+    "@varlet/ui": "^3.20.6",
+    "nuxt": "^4.5.2",
+    "vue": "^3.5.40"
+  },
+  "devDependencies": {
+    "@types/node": "^24.9.2",
+    "@varlet/import-resolver": "^3.20.6",
+    "typescript": "^5.9.3",
+    "unplugin-vue-components": "^32.1.0",
+    "vue-tsc": "^3.3.11"
+  }
+}

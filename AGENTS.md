@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-Irminsul is a private Bun + pnpm workspace whose only package, `@irminsul/akasha`, is a thin TypeScript CLI with two upstream
+Irminsul is a private Bun + pnpm workspace with two packages. `@irminsul/akasha` is a thin TypeScript CLI with two upstream
 sources: the external **AnimeStudio CLI** (`AnimeStudio.CLI.exe`, a `net10.0-windows` .NET build) that extracts
 assets from Genshin Impact's AssetBundle shards, and the **DimbreathBot/AnimeGameData** JSON dumps used for
 localized emoji metadata:
@@ -19,6 +19,11 @@ localized emoji metadata:
 The wrapper adds flag ergonomics, environment-based path resolution, rule-driven asset selection, JSON shape
 normalization, download fallback and an R2 upload step. Actual asset parsing is entirely the upstream binary's
 job — do not reimplement decoding here.
+
+`@irminsul/site` (`packages/site`, Nuxt 4 + Varlet) is the browsing UI for those products: a client-only static SPA
+(`ssr: false`) that fetches `Static/GI/formatted/emoji.json`, one `texts/<LANG>.json` per selected language and the
+PNGs straight from the bucket's public domain (`NUXT_PUBLIC_ASSETS_BASE`), showing one pack per tab. It never reads
+`.parse/` and needs no game install or `R2_*` credentials.
 
 ## Architecture & Data Flow
 
@@ -67,6 +72,14 @@ built against a moved game folder is dead.
 - `packages/akasha/src/` — all source; one file per subcommand under `src/commands/`, shared modules at `src/` root.
 - `packages/akasha/src/rules.json` — export selection rules as **data** (regex groups + `default` list). Extend the
   default export set here, not in TypeScript.
+- `packages/site/app/app.vue` — the whole page in one file: `useAsyncData` fetch of config + texts, search/filter,
+  pack tabs (`var-tabs`), emoji grid (`var-image`), loading/empty/error states (`var-loading`/`var-result`).
+- `packages/site/nuxt.config.ts` — assets base, the Varlet on-demand resolver wiring, and the MD3 dark design vars
+  inlined into `<head>`.
+- `packages/site/app/components.d.ts` — **generated** by the resolver on `nuxt dev`/`build`; committed so a clean
+  checkout typechecks. Do not hand-edit.
+- `packages/site/app/assets/main.css` — page skeleton only (layout + a few classes); every colour comes from
+  Varlet's design variables.
 - `README.md`（根）与 `packages/akasha/README.md` — 面向使用者的说明（快速开始、逐命令参数、产物路径与远端布局）；
   本文件则是给 agent/协作者的约定，两者分工、不互相重复。
 - `.parse/` — gitignored runtime work dir: `anime-studio/` (extracted CLI), `maps/assets_map.map`, `names.txt`,
@@ -111,10 +124,14 @@ pnpm akasha export --out .parse/tmp-check    # 试验性导出到独立目录，
 pnpm akasha export --group logo --pattern '^UI_ItemIcon_1\d+$' --export-type Raw
 pnpm akasha emoji                            # → .parse/emoji/{emoji.json,texts/<LANG>.json}（15 语言；首次约 350MB）
 pnpm akasha upload                           # emoji 产物 + 贴图目录 → R2 Static/GI/{formatted,binary}/（按前缀跳过已存在）
+pnpm site                                    # 站点开发服务器 → http://127.0.0.1:3000（直接读 bucket，不碰 .parse）
+pnpm site:build                              # 站点静态产物 → packages/site/.output/public
 ```
 
 Equivalent direct form: `bun run packages/akasha/src/cli.ts <cmd> [flags]` (or `bun run src/cli.ts` inside
-`packages/akasha`). There is **no build, test, lint or format script** — do not introduce a bundler or transpile step.
+`packages/akasha`). The CLI has **no build, test, lint or format script** — do not introduce a bundler or transpile
+step there. `packages/site` is the one package that builds (`nuxt generate`), and `pnpm typecheck`
+(`pnpm -r typecheck`) covers both packages.
 
 ## Code Conventions & Common Patterns
 
@@ -148,8 +165,11 @@ Equivalent direct form: `bun run packages/akasha/src/cli.ts <cmd> [flags]` (or `
 | `packages/akasha/src/emoji.ts` | DimbreathBot file/language tables (`TEXT_MAP_LANGS` 分片) + `mergeConfigData`/`mergeTextMaps`/`buildTexts` (tolerates upstream shape drift) |
 | `packages/akasha/src/zip.ts` | zip64-capable extractor + `assertZipFile` magic check; traversal guard; no external `tar`/`Expand-Archive` |
 | `packages/akasha/src/s3.ts` | `akasha upload` 的通道：`createS3()` 读 `R2_*` 环境变量 → 分页 `listKeys` + `upload`；只声明用到的 `Bun.S3Client` 表面（tsconfig 无 bun-types） |
-| `packages/akasha/tsconfig.json` | the only tsconfig; all strictness lives here |
-| `package.json` (root) | workspace scripts `akasha`, `typecheck`; `engines.bun`, `packageManager` |
+| `packages/akasha/tsconfig.json` | akasha's tsconfig; every strictness flag for the CLI lives here |
+| `packages/site/nuxt.config.ts` | assets base (`NUXT_PUBLIC_ASSETS_BASE`), Varlet on-demand resolver, MD3 dark design vars inlined into `<head>` |
+| `packages/site/app/app.vue` | the whole site: fetch, search, pack tabs, emoji grid, loading/empty/error states |
+| `packages/site/app/components.d.ts` | resolver-generated `GlobalComponents` types (committed; refreshed by any `nuxt dev`/`build`) |
+| `package.json` (root) | workspace scripts `akasha`, `site`, `site:build`, `typecheck`; `engines.bun`, `packageManager` |
 | `.env` | local `GENSHIN_DIR` + `R2_*` upload config; Bun auto-loads it for `bun run`/`bun` invocations |
 | `.agent/skills/anime-studio-assetmap-export/SKILL.md` | upstream `--map_op`/filter semantics and pitfalls |
 
@@ -159,6 +179,14 @@ Equivalent direct form: `bun run packages/akasha/src/cli.ts <cmd> [flags]` (or `
   `./src/cli.ts` and `noEmit` forbids a `dist/`. pnpm 11.5.0 is install-only.
 - Object storage goes through Bun's built-in `Bun.S3Client` (`src/s3.ts`) — no AWS SDK dependency; the missing Bun
   types are declared locally there instead of relaxing `types: ["node"]`.
+- The site's UI is **Varlet** (`@varlet/ui`), wired for on-demand import in `nuxt.config.ts` via
+  `unplugin-vue-components` + `@varlet/import-resolver`: templates just write `<var-tabs>`/`<var-input>`/… and the
+  resolver injects the component and its styles. Never import from the `@varlet/ui` barrel by hand — its top-level
+  `withInstall` calls defeat tree-shaking (the barrel is only cheap because `sideEffects` is declared).
+  `app/components.d.ts` is generated by that resolver and committed so a clean checkout typechecks.
+- The site is **Material 3 dark only**: `Themes.md3Dark` is spread into an inline `<style>` in `<head>` at build
+  time (selector `:root:root`, to beat Varlet's light defaults that arrive later in the stylesheet). No runtime
+  theme switching, no client plugin, and no pre-hydration flash — do not "restore" a `prefers-color-scheme` switch.
 - TypeScript config is deliberate: `module: "Preserve"` + `moduleResolution: "bundler"` +
   `allowImportingTsExtensions` (paired with `noEmit`), `verbatimModuleSyntax`, `types: ["node"]` only — no DOM lib.
 - Strictness is enforced: `strict`, `noUnusedLocals`, `noUnusedParameters`, `noImplicitOverride`,
@@ -174,7 +202,8 @@ Equivalent direct form: `bun run packages/akasha/src/cli.ts <cmd> [flags]` (or `
 ## Testing & QA
 
 - **There is no test suite, no runner config, no CI, and no lint/format tooling.** The single automated check is
-  `pnpm typecheck` (or `cd packages/akasha && tsc --noEmit`).
+  `pnpm typecheck` — akasha via `tsc --noEmit`, the site via `nuxt typecheck`, which also validates the generated
+  `app/components.d.ts` component/prop types.
 - Manual smoke procedure (Windows + real game install + `akasha init` already done):
   1. `pnpm akasha --help` / `--version` — no external dependencies.
   2. `pnpm akasha export --group logo --out .parse/tmp-check` against the **existing** `.parse/maps/assets_map.map` — the
@@ -197,6 +226,15 @@ Equivalent direct form: `bun run packages/akasha/src/cli.ts <cmd> [flags]` (or `
   7. `pnpm akasha upload` — needs the `R2_*` vars; from an empty remote expect **906 objects** (`emoji.json` +
      15 texts + 890 PNGs from `.parse/export/`) under `Static/GI/{formatted,binary}/`, an immediate second run
      uploading 0, and `--force` re-sending everything.
+- Site smoke test（按全局约定：只有必要时、或用户要求 / 报告问题时才真的打开浏览器；能用 `pnpm typecheck` +
+  构建产物核对就不开）—— `pnpm site`, or serve the `pnpm site:build` output (`packages/site/.output/public`) statically,
+  on **`http://localhost:3000`**: that origin is what the bucket's CORS rules allow, so any other port/domain needs
+  adding there first. Expect the app bar (title + language menu), a horizontally scrolling strip of **51 pack tabs**
+  with the active one underlined, **16** emoji per pack with captions, images from `…/binary/Texture2D/`, and the
+  `n / 827 个表情 · m / 51 个包` counter. Clicking a tab, picking a language in the top-right menu and typing in the
+  search field must each update tabs + panel + counter (search matches text, icon name or pack name), `←`/`→` must
+  move to the previous/next pack and focus it, and the page must render Material 3 dark **even when the OS is in light
+  mode** (the built `index.html` carries the vars — look for `:root:root{`).
 - Symptoms that look like bugs but are not: `akasha export` over an already-populated tree prints
   `Nothing exported. N assets skipped (not extractable or files already exist)` even when it did write a file (the
   summary counts matched assets, not writes — verified by deleting one PNG: 889 files, re-run, 890 files, same

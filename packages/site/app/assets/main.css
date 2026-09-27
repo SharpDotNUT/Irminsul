@@ -1,0 +1,174 @@
+/* 只留页面骨架：全站固定 Material 3 暗色（设计变量由 nuxt.config.ts 内联进 <head>），
+   颜色一律取 Varlet 的设计变量。 */
+:root {
+  color-scheme: dark;
+}
+
+body {
+  margin: 0;
+  font: 14px/1.5 system-ui, "Segoe UI", "Microsoft YaHei", sans-serif;
+  color: var(--color-text);
+  background: var(--color-body);
+}
+
+/* 桌面端：左边竖向标签页、右边表情包；手机端的单列布局见文件末尾的媒体查询。 */
+.layout {
+  display: grid;
+  grid-template-columns: 232px minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+  padding: 12px 16px 16px;
+}
+
+/* 侧栏自己滚动（52 行放不下一屏），滚页面时钉在视口顶部。 */
+.sidebar {
+  position: sticky;
+  top: 0;
+  box-sizing: border-box;
+  height: 100dvh;
+  padding: 8px;
+  overflow-y: auto;
+}
+
+.side-item {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  width: 100%;
+  padding: 8px 12px;
+  font: inherit;
+  color: var(--color-on-surface-variant);
+  text-align: left;
+  background: none;
+  border: 0;
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.side-item:hover {
+  background: var(--color-surface-container-high);
+}
+
+.side-item[aria-selected="true"] {
+  color: var(--color-on-primary-container);
+  background: var(--color-primary-container);
+}
+
+.side-item:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: -2px;
+}
+
+.side-item .label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* 网格列是 `minmax(0, 1fr)`，不加这条里面的大图会把列撑破。 */
+.content {
+  min-width: 0;
+}
+
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.search {
+  flex: 1 1 220px;
+  max-width: 420px;
+}
+
+/* 手机端的表情包菜单：桌面端有侧栏，这里藏起来（display: none 同时把它移出无障碍树）。
+   选择器带上 .toolbar 是为了压过 Varlet 自己的 .var-menu{display: flex}——它和单类选择器同级，
+   但排在 main.css 之后，只写 .pack-menu 会输。 */
+.toolbar .pack-menu {
+  display: none;
+}
+
+.count {
+  color: var(--color-on-surface-variant);
+  font-variant-numeric: tabular-nums;
+}
+
+main {
+  padding-bottom: 16px;
+}
+
+.title {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  margin: 0 0 12px;
+  font-size: 15px;
+  font-weight: 500;
+}
+
+/* 单个表情的大小由 grid 决定：轨道最小宽度取 `min` 夹出来的值——不超过容器四分之一
+   （最多 4 列），不低于二分之一（最少 2 列），中间是 150px 的目标宽度；余量由 1fr 平分。 */
+.grid {
+  --gap: 12px;
+  --cell: 150px;
+  display: grid;
+  grid-template-columns: repeat(
+    auto-fit,
+    minmax(min(calc((100% - var(--gap)) / 2), max(var(--cell), calc((100% - 3 * var(--gap)) / 4))), 1fr)
+  );
+  gap: var(--gap);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.tile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 8px 6px;
+  color: inherit;
+  text-align: center;
+  text-decoration: none;
+  border: thin solid var(--color-outline);
+  border-radius: 12px;
+}
+
+.tile:hover {
+  background: var(--color-surface-container-high);
+}
+
+/* 表情图撑满格子并保持正方形（Varlet 的 .var-image__image 已经是 100%×100%）。 */
+.tile .var-image {
+  width: 100%;
+  aspect-ratio: 1;
+}
+
+.caption {
+  width: 100%;
+  margin-top: 6px;
+  overflow: hidden;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--color-on-surface-variant);
+}
+
+@media (max-width: 720px) {
+  .layout {
+    grid-template-columns: minmax(0, 1fr);
+    padding: 8px 12px 12px;
+  }
+
+  .sidebar {
+    display: none;
+  }
+
+  .toolbar .pack-menu {
+    display: inline-flex;
+  }
+}
