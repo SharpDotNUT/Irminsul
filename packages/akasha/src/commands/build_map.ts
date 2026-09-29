@@ -5,6 +5,7 @@ import { findCli, runCli } from "../anime-studio.ts";
 import { WORK_PATHS, type Context } from "../context.ts";
 import { resolveScanRoot } from "../genshin.ts";
 import { log } from "../log.ts";
+import { trace } from "../timing.ts";
 
 export type BuildMapOptions = {
   input?: string;
@@ -39,7 +40,7 @@ export async function buildMapCommand(ctx: Context, options: BuildMapOptions): P
 
   log(`扫描 blocks: ${blocks}`);
   log(`构建 asset map: ${mapFile}（types: ${options.types.join(", ")}）`);
-  await runCli(cli, ctx.workDir, args);
+  await trace("构建 asset map", () => runCli(cli, ctx.workDir, args));
 
   if (!existsSync(mapFile)) throw new Error(`AnimeStudio 未生成 ${mapFile}`);
   log(`asset map 完成: ${mapFile} (${(statSync(mapFile).size / 1024 / 1024).toFixed(1)} MiB)`);

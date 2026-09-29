@@ -11,6 +11,7 @@ import { TEXT_MAP_LANGS, resolveLangs } from "./emoji.ts";
 import { GENSHIN_DIR_ENV } from "./genshin.ts";
 import { setSilent } from "./log.ts";
 import { rules } from "./rules.ts";
+import { finishTrace, startTrace } from "./timing.ts";
 
 type Arity = "bool" | "value";
 type FlagSpec = Record<string, Arity>;
@@ -240,7 +241,14 @@ async function main(): Promise<void> {
     silent: flags.has("silent"),
   };
   setSilent(ctx.silent);
-  await spec.run(ctx, flags);
+  startTrace(command, argv, ctx.workDir);
+  try {
+    await spec.run(ctx, flags);
+    finishTrace();
+  } catch (error) {
+    finishTrace(error);
+    throw error;
+  }
 }
 
 try {

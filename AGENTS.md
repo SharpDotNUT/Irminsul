@@ -40,7 +40,8 @@ Layers (strictly one direction: `cli.ts` → `commands/` → shared modules):
 | Export only | `src/rules.ts` + `src/rules.json` | named regex groups → `patternsForGroups` |
 | Emoji only | `src/emoji.ts` | DimbreathBot URLs + `mergeConfigData`/`mergeTextMaps`/`buildTexts` (config merge, container/field-name drift, RU/TH shard merge, per-language split) |
 | Upload | `src/s3.ts` | `Bun.S3Client` facade: `R2_*` env config, paged prefix listing, single-file upload (`Content-Type` from the extension) |
-| Logging | `src/log.ts` | `log` (suppressed by `--silent`), `warn` (never suppressed) |
+| Logging | `src/log.ts` | `log` (suppressed by `--silent`), `warn` (never suppressed), `setLogSink` (every line also goes to the run log) |
+| Timing | `src/timing.ts` | `startTrace`/`finishTrace` (called from `cli.ts`, one `<workDir>/logs/<command>-<stamp>.log` per run) and `trace(label, fn)` — commands time each phase, the run ends with a summary |
 
 Data flow per command:
 
@@ -84,7 +85,8 @@ built against a moved game folder is dead.
   本文件则是给 agent/协作者的约定，两者分工、不互相重复。
 - `.parse/` — gitignored runtime work dir: `anime-studio/` (extracted CLI), `maps/assets_map.map`, `names.txt`,
   `downloads/`, `export/` (`akasha export` 的 PNG 产物，upload 的来源), `dimbreath/` (raw upstream emoji JSON,
-  ~348MiB) and `emoji/` (products: `emoji.json` + `texts/<LANG>.json`). The name (and `PARSE_WORK_DIR`) is
+  ~348MiB), `emoji/` (products: `emoji.json` + `texts/<LANG>.json`) and `logs/` (每次运行的耗时日志，一次运行一个文件，
+  只有几 KB，可以随时删). The name (and `PARSE_WORK_DIR`) is
   deliberately kept after the `parse` → `@irminsul/akasha` rename: it holds the expensive caches, so renaming the
   directory would mean moving them. Never edit by hand; refresh the CLI with
   `akasha init --force`, rebuild the map only when the game folder actually changed, refetch the Dimbreath JSON with
@@ -204,8 +206,10 @@ step there. `packages/site` is the one package that builds (`nuxt generate`), an
 - **There is no test suite, no runner config, no CI, and no lint/format tooling.** The single automated check is
   `pnpm typecheck` — akasha via `tsc --noEmit`, the site via `nuxt typecheck`, which also validates the generated
   `app/components.d.ts` component/prop types.
-- Manual smoke procedure (Windows + real game install + `akasha init` already done):
-  1. `pnpm akasha --help` / `--version` — no external dependencies.
+- Manual smoke procedure (Windows + real game install + `akasha init` already done). Every command except
+  `--help`/`--version` prints a per-step `耗时统计` at the end and writes a log mirroring the terminal output to
+  `<workDir>/logs/<command>-<stamp>.log` (`--silent` only mutes the terminal, the log is always written):
+  1. `pnpm akasha --help` / `--version` — no external dependencies, no run log.
   2. `pnpm akasha export --group logo --out .parse/tmp-check` against the **existing** `.parse/maps/assets_map.map` — the
      normal verification loop (seconds, no rescan; `--out` keeps the shared `.parse/export/` cache untouched).
   3. Only when the map itself is the subject of the change: `pnpm akasha build_map --input '<blocks>/00'` into a

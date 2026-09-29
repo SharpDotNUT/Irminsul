@@ -14,6 +14,7 @@ import {
   textMapFile,
 } from "../emoji.ts";
 import { log, warn } from "../log.ts";
+import { trace } from "../timing.ts";
 
 export type EmojiOptions = {
   /** 需要解析的语言（`resolveLangs` 的结果，空即全部）。 */
@@ -42,38 +43,45 @@ export async function emojiCommand(ctx: Context, options: EmojiOptions): Promise
 
   const emojiFile = join(cacheDir, basename(EMOJI_FILE));
   const setFile = join(cacheDir, basename(EMOJI_SET_FILE));
-  await downloadCached(dataUrl(EMOJI_FILE), emojiFile, options.force);
-  await downloadCached(dataUrl(EMOJI_SET_FILE), setFile, options.force);
-  const { data, hashes, orphanSetIDs } = mergeConfigData(
-    options.langs,
-    await readJson(emojiFile),
-    await readJson(setFile),
+  await trace("下载 Config Data", async () => {
+    await downloadCached(dataUrl(EMOJI_FILE), emojiFile, options.force);
+    await downloadCached(dataUrl(EMOJI_SET_FILE), setFile, options.force);
+  });
+  const { data, hashes, orphanSetIDs } = await trace("合并 Config Data", async () =>
+    mergeConfigData(options.langs, await readJson(emojiFile), await readJson(setFile)),
   );
 
   // 只保留配置引用到的 hash：全语言 TextMap 合计约 350MB，整份解析后不能同时留在内存里。
   log(`语言: ${options.langs.join(", ")}（${hashes.size} 个 hash 待解析）`);
   const texts: Record<string, Map<string, string>> = {};
   for (const lang of options.langs) {
-    const parts: unknown[] = [];
-    for (const suffix of TEXT_MAP_LANGS[lang]!) {
-      const file = join(cacheDir, `TextMap_Medium${suffix}.json`);
-      await downloadCached(dataUrl(textMapFile(suffix)), file, options.force);
-      parts.push(await readJson(file));
-    }
-    texts[lang] = mergeTextMaps(parts, hashes);
-    log(`  ${lang}: 合并 ${parts.length} 个分片 -> ${texts[lang].size}/${hashes.size} 条文案`);
+    const merged = await trace(`解析 ${lang} 文案`, async () => {
+      const parts: unknown[] = [];
+      for (const suffix of TEXT_MAP_LANGS[lang]!) {
+        const file = join(cacheDir, `TextMap_Medium${suffix}.json`);
+        await downloadCached(dataUrl(textMapFile(suffix)), file, options.force);
+        parts.push(await readJson(file));
+      }
+      return { shards: parts.length, texts: mergeTextMaps(parts, hashes) };
+    });
+    texts[lang] = merged.texts;
+    log(`  ${lang}: 合并 ${merged.shards} 个分片 -> ${merged.texts.size}/${hashes.size} 条文案`);
   }
-  const { byLang, missing, incomplete } = buildTexts(hashes, options.langs, texts);
+  const { byLang, missing, incomplete } = await trace("生成文案表", () =>
+    buildTexts(hashes, options.langs, texts),
+  );
 
   // 原始缓存留在 <workDir>/dimbreath/，产物单独放 <out>/，不再混在一起。
   const outDir = resolve(options.out ?? join(ctx.workDir, WORK_PATHS.emoji));
   const textsDir = join(outDir, TEXTS_DIR);
-  await mkdir(textsDir, { recursive: true });
   const configFile = join(outDir, CONFIG_FILE);
-  await writeFile(configFile, `${JSON.stringify(data, null, 2)}\n`);
-  for (const lang of options.langs) {
-    await writeFile(join(textsDir, `${lang}.json`), `${JSON.stringify(byLang[lang], null, 2)}\n`);
-  }
+  await trace("写出产物", async () => {
+    await mkdir(textsDir, { recursive: true });
+    await writeFile(configFile, `${JSON.stringify(data, null, 2)}\n`);
+    for (const lang of options.langs) {
+      await writeFile(join(textsDir, `${lang}.json`), `${JSON.stringify(byLang[lang], null, 2)}\n`);
+    }
+  });
 
   const emojis = data.sets.reduce((total, set) => total + set.emojis.length, 0);
   log(`数据源: ${DATA_REPO}（${data.langs.length} 种语言）`);

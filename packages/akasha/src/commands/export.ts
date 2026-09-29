@@ -6,6 +6,7 @@ import { WORK_PATHS, type Context } from "../context.ts";
 import { resolveScanRoot } from "../genshin.ts";
 import { log } from "../log.ts";
 import { patternsForGroups, rules } from "../rules.ts";
+import { trace } from "../timing.ts";
 
 export type ExportOptions = {
   input?: string;
@@ -56,7 +57,7 @@ export async function exportCommand(ctx: Context, options: ExportOptions): Promi
     log(`共 ${patterns.length} 条正则`);
 
     const namesFile = join(ctx.workDir, WORK_PATHS.namesFile);
-    await writeFile(namesFile, `${patterns.join("\n")}\n`);
+    await trace("写出 names.txt", () => writeFile(namesFile, `${patterns.join("\n")}\n`));
     namesArgs = ["--names", namesFile];
   }
 
@@ -82,7 +83,10 @@ export async function exportCommand(ctx: Context, options: ExportOptions): Promi
   ];
 
   log(`导出到: ${outArg}`);
-  await runCli(cli, ctx.workDir, args);
+  await trace("导出资产", () => runCli(cli, ctx.workDir, args));
 
-  if (existsSync(outArg)) log(`导出目录现有 ${countFiles(outArg)} 个文件: ${outArg}`);
+  if (existsSync(outArg)) {
+    const count = await trace("统计导出文件", () => countFiles(outArg));
+    log(`导出目录现有 ${count} 个文件: ${outArg}`);
+  }
 }

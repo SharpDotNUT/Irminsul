@@ -3,6 +3,7 @@ import { join, relative, resolve, sep } from "node:path";
 import { WORK_PATHS, type Context } from "../context.ts";
 import { log } from "../log.ts";
 import { createS3 } from "../s3.ts";
+import { trace } from "../timing.ts";
 
 export type UploadOptions = {
   /** emoji 产物目录（`emoji.json` + `texts/`），默认 `<workDir>/emoji`。 */
@@ -53,16 +54,19 @@ export async function uploadCommand(ctx: Context, options: UploadOptions): Promi
     },
   ];
 
-  const entries: { key: string; path: string; size: number }[] = [];
-  for (const source of sources) {
-    if (!existsSync(source.dir)) {
-      throw new Error(`目录不存在: ${source.dir}\n请先运行: ${source.hint}`);
+  const entries = await trace("收集待上传文件", () => {
+    const collected: { key: string; path: string; size: number }[] = [];
+    for (const source of sources) {
+      if (!existsSync(source.dir)) {
+        throw new Error(`目录不存在: ${source.dir}\n请先运行: ${source.hint}`);
+      }
+      for (const relativePath of walkFiles(source.dir)) {
+        const path = join(source.dir, relativePath);
+        collected.push({ key: `${prefix}/${source.category}/${relativePath}`, path, size: statSync(path).size });
+      }
     }
-    for (const relativePath of walkFiles(source.dir)) {
-      const path = join(source.dir, relativePath);
-      entries.push({ key: `${prefix}/${source.category}/${relativePath}`, path, size: statSync(path).size });
-    }
-  }
+    return collected;
+  });
   if (entries.length === 0) {
     log(`没有文件可上传（${sources.map((source) => source.dir).join(", ")}）`);
     return;
@@ -70,21 +74,23 @@ export async function uploadCommand(ctx: Context, options: UploadOptions): Promi
 
   const s3 = createS3();
   log(`读取远端列表: s3://${s3.bucket}/${prefix}/`);
-  const remote = await s3.listKeys(`${prefix}/`);
+  const remote = await trace("读取远端列表", () => s3.listKeys(`${prefix}/`));
 
   const pending = entries.filter((entry) => options.force || remote.get(entry.key) !== entry.size);
   const skipped = entries.length - pending.length;
   let uploaded = 0;
   let bytes = 0;
-  const workers = Array.from({ length: Math.min(UPLOAD_CONCURRENCY, pending.length) }, async () => {
-    for (let entry = pending.shift(); entry !== undefined; entry = pending.shift()) {
-      await s3.upload(entry.key, entry.path);
-      uploaded += 1;
-      bytes += entry.size;
-      log(`上传: ${entry.key}`);
-    }
+  await trace(`上传对象（${pending.length} 个）`, async () => {
+    const workers = Array.from({ length: Math.min(UPLOAD_CONCURRENCY, pending.length) }, async () => {
+      for (let entry = pending.shift(); entry !== undefined; entry = pending.shift()) {
+        await s3.upload(entry.key, entry.path);
+        uploaded += 1;
+        bytes += entry.size;
+        log(`上传: ${entry.key}`);
+      }
+    });
+    await Promise.all(workers);
   });
-  await Promise.all(workers);
 
   log(`跳过 ${skipped} 个已存在且大小相同的对象（--force 可重传）`);
   log(`上传完成: ${uploaded} 个对象 / ${(bytes / 1024 / 1024).toFixed(1)} MiB -> s3://${s3.bucket}/${prefix}/`);

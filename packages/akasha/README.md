@@ -28,6 +28,23 @@ cd packages/akasha && pnpm akasha <command>    # 包内
 | `emoji` | 合并表情配置 + 每语言文案表 | `.parse/emoji/{emoji.json,texts/<LANG>.json}` |
 | `upload` | 把产物推到对象存储 | R2 `Static/GI/{formatted,binary}/**` |
 
+## 耗时与日志
+
+每个命令都会在终端逐步打印耗时（`12.34s  导出资产`），结束时给出每一步的汇总、合计与**本进程**峰值内存
+（上游 CLI 是独立子进程，它的内存不在这个数字里）：
+
+```
+耗时统计:
+     1ms  写出 names.txt
+   2.55s  导出资产
+   2.56s  合计  ·  本进程峰值内存 85 MiB
+日志: <work-dir>/logs/export-20260929-135227.log
+```
+
+同一次运行的输出（耗时步骤、warning、各命令自己的日志行）会同时写进
+`<work-dir>/logs/<命令>-<本地时间>.log`；上游 CLI 直通到终端的那部分不在这里面。这是回看“慢在哪一步”的地方，
+一次运行也就几 KB，可以随时删。`--silent` 只压终端，日志照写。
+
 ## init
 
 ```bash
