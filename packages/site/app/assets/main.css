@@ -238,6 +238,13 @@ main {
   aspect-ratio: 1;
 }
 
+/* 「显示更多」那行同时也是自动续渲染的哨兵：进视口附近就再放一屏。 */
+.more {
+  display: flex;
+  justify-content: center;
+  padding: 16px 0 4px;
+}
+
 .caption {
   width: 100%;
   margin-top: 6px;

@@ -89,8 +89,11 @@ built against a moved game folder is dead.
 - `packages/akasha/src/rules.json` — export selection rules as **data** (regex groups + `default` list). Extend the
   default export set here, not in TypeScript.
 - `packages/site/app/app.vue` — the shell only: the app bar, the nav (`/` 表情包 / `/map` 地图) and `<NuxtPage />`.
-- `packages/site/app/pages/index.vue` — the emoji page (`/`): `useAsyncData` fetch of config + texts,
-  search/filter, pack tabs, emoji grid (`var-image`), loading/empty/error states (`var-loading`/`var-result`).
+- `packages/site/app/pages/index.vue` — the emoji page (`/`): two `useAsyncData`s (the config once, the texts keyed
+  by language so a language switch refetches only the texts), one computed that joins them into packs, search/filter,
+  the pack list, the emoji grid (`var-image` with `lazy`), loading/empty/error states
+  (`var-loading`/`var-result`), and an incremental reveal — 「全部表情」 holds 827 tiles, so only `CHUNK` of them are
+  mounted at a time and the 「显示更多」 row doubles as the `IntersectionObserver` sentinel that continues it.
 - `packages/site/app/pages/map.vue` — the map page (`/map`): canvas renderer, level selection, parent-tile
   fallback, tile cache/eviction/prefetch, pan/zoom/double-click, the perf + cursor panel.
 - `packages/site/app/utils/map-geometry.ts` — the client half of the tile contract (`gridsOf`, `levelFor`,
@@ -295,9 +298,13 @@ step there. `packages/site` is the one package that builds (`nuxt generate`), an
   `n / 827 个表情 · m / 51 个包` counter. Clicking a tab, picking a language and typing in the search field must each
   update tabs + panel + counter (search matches text, icon name or pack name), `←`/`→` must move to the previous/next
   pack and focus it, and the page must render Material 3 dark **even when the OS is in light mode** (the built
-  `index.html` carries the vars — look for `:root:root{`). The map page (`/map`, reachable directly — the built
-  output has `map/index.html`) draws the region fitted into a canvas (drag to pan, wheel to zoom around the cursor,
-  double-click to zoom in) with a panel showing the region picker, the level in px/cell and the resident-tile count;
+  `index.html` carries the vars — look for `:root:root{`). The grid only mounts a chunk at a time (the first 120
+  tiles, then the 「显示更多」 row continues it as it scrolls into view — that button is also the manual fallback);
+  changing pack/language/search must restart it from the first chunk. Switching language must refetch only
+  `texts/<LANG>.json` (the config is language-independent and its request must not repeat). The map page (`/map`,
+  reachable directly — the built output has `map/index.html`) draws the region fitted into a canvas (drag to pan,
+  wheel to zoom around the cursor, double-click to zoom in) with a panel showing the region picker, the level in
+  px/cell and the resident-tile count;
   switching region refits, and a tile that is still downloading must never show as a blank frame — its coarser
   ancestor paints instead.
   Without a browser: `pnpm site:build` must succeed and emit `.output/public/{index,200,404}.html` plus
