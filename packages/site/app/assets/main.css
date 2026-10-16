@@ -11,6 +11,95 @@ body {
   background: var(--color-body);
 }
 
+/* 顶级功能导航（表情包 / 地图）：Material 3 的 secondary tabs 形态。 */
+.app-nav {
+  display: flex;
+  gap: 4px;
+  padding: 0 16px;
+  border-bottom: thin solid var(--color-outline-variant);
+}
+
+.nav-item {
+  padding: 10px 16px;
+  font: inherit;
+  font-weight: 500;
+  color: var(--color-on-surface-variant);
+  background: none;
+  border: 0;
+  border-bottom: 3px solid transparent;
+  cursor: pointer;
+}
+
+.nav-item:hover {
+  background: var(--color-surface-container-high);
+}
+
+.nav-item[aria-current="page"] {
+  color: var(--color-primary);
+  border-bottom-color: var(--color-primary);
+}
+
+.nav-item:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: -2px;
+}
+
+/* 地图查看器：canvas 铺满一块视口高的区域，读数面板浮在左上角。 */
+.map {
+  position: relative;
+  height: calc(100dvh - 116px);
+  min-height: 360px;
+  overflow: hidden;
+  background: #0b141c;
+}
+
+.map-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  cursor: grab;
+  touch-action: none;
+}
+
+.map-canvas:active {
+  cursor: grabbing;
+}
+
+.map-panel {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-width: min(92%, 720px);
+  padding: 8px 10px;
+  background: color-mix(in srgb, var(--color-surface-container) 82%, transparent);
+  border: thin solid var(--color-outline-variant);
+  border-radius: 8px;
+  backdrop-filter: blur(4px);
+}
+
+.map-region {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  color: var(--color-on-surface-variant);
+}
+
+.map-perf {
+  margin: 0;
+  overflow-x: auto;
+  font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  color: var(--color-primary);
+  white-space: pre;
+}
+
+.map-hud {
+  font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  color: var(--color-on-surface-variant);
+}
+
 /* 桌面端：左边竖向标签页、右边表情包；手机端的单列布局见文件末尾的媒体查询。 */
 .layout {
   display: grid;

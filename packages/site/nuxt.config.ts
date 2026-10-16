@@ -39,7 +39,7 @@ export default defineNuxtConfig({
   },
   app: {
     head: {
-      title: "原神表情包",
+      title: "原神资料站",
       htmlAttrs: { lang: "zh-CN" },
       meta: [{ name: "viewport", content: "width=device-width, initial-scale=1" }],
       style: [{ innerHTML: `:root:root{${MD3_DARK_STYLE_VARS}}` }],

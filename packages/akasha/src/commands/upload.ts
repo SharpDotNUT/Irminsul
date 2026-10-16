@@ -2,6 +2,7 @@ import { existsSync, readdirSync, statSync } from "node:fs";
 import { join, relative, resolve, sep } from "node:path";
 import { WORK_PATHS, type Context } from "../context.ts";
 import { log } from "../log.ts";
+import { MAP_MANIFEST } from "../map-tiles.ts";
 import { createS3 } from "../s3.ts";
 import { trace } from "../timing.ts";
 
@@ -10,6 +11,8 @@ export type UploadOptions = {
   emojiDir?: string;
   /** 贴图目录，默认 `<workDir>/export`（`akasha export` 的默认输出目录）。 */
   imagesDir?: string;
+  /** 地图瓦片目录（`map.json` + `<region>/<R>/*.webp`），默认 `<workDir>/pyramid`。 */
+  tilesDir?: string;
   /** 远端前缀（首尾斜杠会被去掉），默认 `Static/GI`。 */
   prefix: string;
   /** 重传已存在且大小相同的对象。 */
@@ -19,6 +22,8 @@ export type UploadOptions = {
 /** 远端分类：文本/JSON 与贴图分开，下游可按类型设缓存策略。 */
 const FORMATTED = "formatted";
 const BINARY = "binary";
+/** 瓦片在 `binary/` 下的名字；清单（JSON）仍归 `formatted/`。 */
+const MAP_TILES = "MapTile";
 
 /** 单次 S3 往返以百毫秒计，串行传 900 个文件太慢，保持少量并发就够了。 */
 const UPLOAD_CONCURRENCY = 12;
@@ -44,13 +49,20 @@ export async function uploadCommand(ctx: Context, options: UploadOptions): Promi
   const sources = [
     {
       dir: resolve(options.emojiDir ?? join(ctx.workDir, WORK_PATHS.emoji)),
-      category: FORMATTED,
       hint: "akasha emoji",
+      key: (rel: string) => `${prefix}/${FORMATTED}/${rel}`,
     },
     {
       dir: resolve(options.imagesDir ?? join(ctx.workDir, WORK_PATHS.export)),
-      category: BINARY,
       hint: "akasha export",
+      key: (rel: string) => `${prefix}/${BINARY}/${rel}`,
+    },
+    {
+      dir: resolve(options.tilesDir ?? join(ctx.workDir, WORK_PATHS.pyramid)),
+      hint: "akasha pyramid",
+      // 瓦片目录里那份清单是站点的入口数据，和 emoji.json 一样归 formatted/。
+      key: (rel: string) =>
+        rel === MAP_MANIFEST ? `${prefix}/${FORMATTED}/${MAP_MANIFEST}` : `${prefix}/${BINARY}/${MAP_TILES}/${rel}`,
     },
   ];
 
@@ -62,7 +74,7 @@ export async function uploadCommand(ctx: Context, options: UploadOptions): Promi
       }
       for (const relativePath of walkFiles(source.dir)) {
         const path = join(source.dir, relativePath);
-        collected.push({ key: `${prefix}/${source.category}/${relativePath}`, path, size: statSync(path).size });
+        collected.push({ key: source.key(relativePath), path, size: statSync(path).size });
       }
     }
     return collected;

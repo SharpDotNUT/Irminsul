@@ -11,7 +11,36 @@
     "emotion-tag-icon": {
       "description": "表情标签角标：UI_EmotionTagIcon_00..UI_EmotionTagIcon_51",
       "patterns": ["^UI_EmotionTagIcon_\\d+$"]
+    },
+    "avatar-icon": {
+      "description": "角色基础头像：UI_AvatarIcon_<角色名>（含 Side/Circle/Card 等变体，按前缀匹配）",
+      "patterns": ["^UI_AvatarIcon_"]
+    },
+    "gacha-avatar-img": {
+      "description": "角色立绘：UI_Gacha_AvatarImg_<角色名>（按前缀匹配）",
+      "patterns": ["^UI_Gacha_AvatarImg_"]
+    },
+    "map-back": {
+      "description": "地图底图：UI_MapBack_<地图>_<层>（按前缀匹配）",
+      "patterns": ["^UI_MapBack_"]
+    },
+    "namecard-pic": {
+      "description": "名片图：UI_NameCardPic_<名称>（按前缀匹配）",
+      "patterns": ["^UI_NameCardPic_"]
+    },
+    "chapter-icon": {
+      "description": "章节图标：UI_ChapterIcon_<章节名>（按前缀匹配）",
+      "patterns": ["^UI_ChapterIcon_"]
     }
   },
-  "default": ["logo", "emotion-icon", "emotion-tag-icon"]
+  "default": [
+    "logo",
+    "emotion-icon",
+    "emotion-tag-icon",
+    "avatar-icon",
+    "gacha-avatar-img",
+    "map-back",
+    "namecard-pic",
+    "chapter-icon"
+  ]
 }

@@ -23,6 +23,8 @@ export const WORK_PATHS = {
   dimbreath: "dimbreath",
   /** `akasha emoji` 的产物（合并后的 config + 每语言一份文案表）。 */
   emoji: "emoji",
+  /** `akasha pyramid` 的产物（清单 `map.json` + `<region>/<R>/*.webp`）。 */
+  pyramid: "pyramid",
   /** 每次运行的耗时日志，一次运行一个文件（见 `timing.ts`）。 */
   logs: "logs",
 } as const;

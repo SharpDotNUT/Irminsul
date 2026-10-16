@@ -5,6 +5,7 @@ import { buildMapCommand } from "./commands/build_map.ts";
 import { emojiCommand } from "./commands/emoji.ts";
 import { exportCommand } from "./commands/export.ts";
 import { initCommand } from "./commands/init.ts";
+import { pyramidCommand } from "./commands/pyramid.ts";
 import { uploadCommand } from "./commands/upload.ts";
 import { WORK_DIR_ENV, WORK_DIR_NAME, resolveWorkDir, type Context } from "./context.ts";
 import { TEXT_MAP_LANGS, resolveLangs } from "./emoji.ts";
@@ -123,14 +124,26 @@ const COMMANDS: Record<string, CommandSpec> = {
         force: flags.has("force"),
       }),
   },
+  pyramid: {
+    summary: "把 export 出的 UI_MapBack 贴图切成 WebP 金字塔瓦片（站点地图浏览用）",
+    usage: "akasha pyramid [--input <export 目录>] [--out <目录>] [--region <名称>]",
+    flags: { input: "value", out: "value", region: "value" },
+    run: (ctx, flags) =>
+      pyramidCommand(ctx, {
+        input: flags.get("input")?.at(-1),
+        out: flags.get("out")?.at(-1),
+        regions: flagValues(flags, "region"),
+      }),
+  },
   upload: {
-    summary: "上传 emoji 产物（formatted）与贴图（binary，默认取工作目录的 export/）到对象存储",
-    usage: "akasha upload [--emoji <dir>] [--images <dir>] [--prefix <前缀>] [--force]",
-    flags: { emoji: "value", images: "value", prefix: "value", force: "bool" },
+    summary: "上传 emoji 产物（formatted）、贴图（binary）与地图瓦片（binary/MapTile）到对象存储",
+    usage: "akasha upload [--emoji <dir>] [--images <dir>] [--pyramid <dir>] [--prefix <前缀>] [--force]",
+    flags: { emoji: "value", images: "value", pyramid: "value", prefix: "value", force: "bool" },
     run: (ctx, flags) =>
       uploadCommand(ctx, {
         emojiDir: flags.get("emoji")?.at(-1),
         imagesDir: flags.get("images")?.at(-1),
+        tilesDir: flags.get("pyramid")?.at(-1),
         prefix: flags.get("prefix")?.at(-1) ?? "Static/GI",
         force: flags.has("force"),
       }),
@@ -168,6 +181,7 @@ function printUsage(command?: string): void {
       "  akasha export --out D:\\out",
       "  akasha export --group logo --pattern '^UI_ItemIcon_1\\d+$'",
       "  akasha emoji --lang CHS,EN",
+      "  akasha pyramid",
       "  akasha upload",
       "",
       "export 规则组:",

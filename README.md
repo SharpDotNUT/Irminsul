@@ -10,8 +10,9 @@ pnpm akasha --help     # 命令、环境变量、导出规则组
 
 pnpm akasha init       # 下载并解压 AnimeStudio CLI（一次即可）→ .parse/anime-studio/
 pnpm akasha build_map  # 建索引（一次即可，全量约 8 分钟 / 54 GB）→ .parse/maps/assets_map.map
-pnpm akasha export     # 导出 PNG（日常，复用索引、秒级）→ .parse/export/Texture2D/
+pnpm akasha export     # 导出 PNG（复用索引、不重扫，已有文件跳过）→ .parse/export/Texture2D/
 pnpm akasha emoji      # 表情配置 + 每语言文案表 → .parse/emoji/
+pnpm akasha pyramid    # 把 UI_MapBack 贴图切成地图瓦片金字塔 → .parse/pyramid/
 pnpm akasha upload     # 推到 R2 → Static/GI/{formatted,binary}/
 ```
 
@@ -29,7 +30,13 @@ pnpm site:build   # 静态产物 → packages/site/.output/public（拷到任意
 ```
 
 它不读 `.parse/`，运行时直接取 bucket 公共域名下的 `Static/GI/`：`formatted/emoji.json`（表情包结构）、
-`formatted/texts/<语言>.json`（15 种语言的文案）与 `binary/Texture2D/*.png`。换域名/换前缀用
+`formatted/texts/<语言>.json`（15 种语言的文案）、`binary/Texture2D/*.png`，以及地图的
+`formatted/map.json` + `binary/MapTile/<region>/<R>/<gx>_<gy>.webp`。换域名/换前缀用
 `NUXT_PUBLIC_ASSETS_BASE` 覆盖（构建时读取）；站点挂在别的域名下时，记得把该 origin 加进 bucket 的 CORS
-规则。界面固定 Material 3 暗色主题，顶部一行横向滚动的表情包标签，下面板展示该包全部表情（点开看原图）。
+规则。界面固定 Material 3 暗色主题，顶部两个并列的功能：
+
+- **表情包** —— 左侧竖向表情包列表 + 右侧网格，可搜索文案/图标名/包名，右上角切换语言。
+- **地图** —— 直接画在 canvas 上，可拖拽平移、滚轮缩放（以光标为锚）、双击放大，左上角选区域并显示
+  帧耗时/每帧源数据/常驻瓦片数。瓦片按需加载、跨档用父档顶上，所以缩放不会闪白也不会一次拉几百张图。
+
 上游缺的那条文案（`UI_EmotionTagIcon_51` 的名字）在页面上表现为回退到图标名 —— 数据如此，不是站点的问题。
