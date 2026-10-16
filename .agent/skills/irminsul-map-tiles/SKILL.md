@@ -13,7 +13,7 @@ description: Irminsul 的 UI_MapBack 地图瓦片：akasha pyramid 怎么把导�
 | `packages/akasha/src/image.ts` | `Bun.Image` 缺的那半：`decodePng` / `encodeBmp` / `crop` / `halve` / `blit` / `isBlank` |
 | `packages/akasha/src/commands/pyramid.ts` | `akasha pyramid` 命令 |
 | `packages/site/app/utils/map-geometry.ts` | 站点侧镜像（必须与 `map-tiles.ts` 同步改） |
-| `packages/site/app/components/MapViewer.vue` | canvas 查看器 |
+| `packages/site/app/pages/map.vue` | canvas 查看器（站点地图页 `/map`） |
 
 ## 1. 三条规则（全部来自资源本身，不是约定）
 
@@ -73,7 +73,7 @@ description: Irminsul 的 UI_MapBack 地图瓦片：akasha pyramid 怎么把导�
 
 **不要**用这套东西去解码游戏原始资源（那是 `Bun.Image` 的活），也不要试图手写 WebP 编码器。
 
-## 5. 查看器（`MapViewer.vue`）
+## 5. 查看器（`packages/site/app/pages/map.vue`）
 
 每帧对每个可见位置走**两趟**，这是踩出来的：
 

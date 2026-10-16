@@ -23,11 +23,14 @@ normalization, download fallback and an R2 upload step. Actual asset parsing is 
 job — do not reimplement decoding here.
 
 `@irminsul/site` (`packages/site`, Nuxt 4 + Varlet) is the browsing UI for those products: a client-only static SPA
-(`ssr: false`) with two side-by-side features, switched by a top nav — **表情包** (fetches
+(`ssr: false`) with **two routes**, linked by a top nav — `/` **表情包** (fetches
 `Static/GI/formatted/emoji.json`, one `texts/<LANG>.json` per selected language and the PNGs straight from the
-bucket's public domain, showing one pack per tab) and **地图** (fetches `formatted/map.json` then draws the
+bucket's public domain, showing one pack per tab) and `/map` **地图** (fetches `formatted/map.json` then draws the
 `binary/MapTile/<region>/<R>/<gx>_<gy>.webp` pyramid onto a canvas with pan/zoom). All of it comes from the bucket's
 public domain (`NUXT_PUBLIC_ASSETS_BASE`); it never reads `.parse/` and needs no game install or `R2_*` credentials.
+The two are **routes, not tabs of one page**: each page is its own lazy chunk and navigating unmounts the other, so
+the map's canvas + tile cache (a few hundred MB of live bitmaps) can never pile onto the emoji page's 800-odd
+`<img>`s in the same document — opening `/map` directly never allocates the emoji view at all.
 
 ## Architecture & Data Flow
 
@@ -85,10 +88,10 @@ built against a moved game folder is dead.
 - `packages/akasha/src/` — all source; one file per subcommand under `src/commands/`, shared modules at `src/` root.
 - `packages/akasha/src/rules.json` — export selection rules as **data** (regex groups + `default` list). Extend the
   default export set here, not in TypeScript.
-- `packages/site/app/app.vue` — the shell only: the app bar, the top nav (表情包 / 地图) and the two views.
-- `packages/site/app/components/EmojiExplorer.vue` — the emoji feature: `useAsyncData` fetch of config + texts,
+- `packages/site/app/app.vue` — the shell only: the app bar, the nav (`/` 表情包 / `/map` 地图) and `<NuxtPage />`.
+- `packages/site/app/pages/index.vue` — the emoji page (`/`): `useAsyncData` fetch of config + texts,
   search/filter, pack tabs, emoji grid (`var-image`), loading/empty/error states (`var-loading`/`var-result`).
-- `packages/site/app/components/MapViewer.vue` — the map feature: canvas renderer, level selection, parent-tile
+- `packages/site/app/pages/map.vue` — the map page (`/map`): canvas renderer, level selection, parent-tile
   fallback, tile cache/eviction/prefetch, pan/zoom/double-click, the perf + cursor panel.
 - `packages/site/app/utils/map-geometry.ts` — the client half of the tile contract (`gridsOf`, `levelFor`,
   `levelTiles`, `tileRect`, `visibleTiles`, `tileAtWorld`, `boundsOf`, `tileUrl`). **It mirrors
@@ -198,9 +201,9 @@ step there. `packages/site` is the one package that builds (`nuxt generate`), an
 | `packages/akasha/src/s3.ts` | `akasha upload` 的通道：`createS3()` 读 `R2_*` 环境变量 → 分页 `listKeys` + `upload`；只声明用到的 `Bun.S3Client` 表面（tsconfig 无 bun-types） |
 | `packages/akasha/tsconfig.json` | akasha's tsconfig; every strictness flag for the CLI lives here |
 | `packages/site/nuxt.config.ts` | assets base (`NUXT_PUBLIC_ASSETS_BASE`), Varlet on-demand resolver, MD3 dark design vars inlined into `<head>` |
-| `packages/site/app/app.vue` | 站点外壳：app bar + 顶级导航（表情包 / 地图），两个功能各自一个组件 |
-| `packages/site/app/components/EmojiExplorer.vue` | 表情包功能全在这里：fetch、搜索、表情包标签、表情网格、加载/空/错误态 |
-| `packages/site/app/components/MapViewer.vue` | 地图功能全在这里：canvas 渲染、档位选择、父档回退、瓦片缓存/驱逐/预取、平移缩放、读数面板 |
+| `packages/site/app/app.vue` | 站点外壳：app bar + 导航（`/` 表情包、`/map` 地图）+ `<NuxtPage />` |
+| `packages/site/app/pages/index.vue` | 表情包页（`/`）全在这里：fetch、搜索、表情包标签、表情网格、加载/空/错误态 |
+| `packages/site/app/pages/map.vue` | 地图页（`/map`）全在这里：canvas 渲染、档位选择、父档回退、瓦片缓存/驱逐/预取、平移缩放、读数面板 |
 | `packages/site/app/utils/map-geometry.ts` | 站点侧的地图几何，必须与 `src/map-tiles.ts` 同步（档位规则、`(-y,-x)` 映射、URL 形状） |
 | `packages/site/app/components.d.ts` | resolver-generated `GlobalComponents` types (committed; refreshed by any `nuxt dev`/`build`) |
 | `package.json` (root) | workspace scripts `akasha`, `site`, `site:build`, `typecheck`; `engines.bun`, `packageManager` |
@@ -286,19 +289,21 @@ step there. `packages/site` is the one package that builds (`nuxt generate`), an
 - Site smoke test（按全局约定：只有必要时、或用户要求 / 报告问题时才真的打开浏览器；能用 `pnpm typecheck` +
   构建产物核对就不开）—— `pnpm site`, or serve the `pnpm site:build` output (`packages/site/.output/public`) statically,
   on **`http://localhost:3000`**: that origin is what the bucket's CORS rules allow, so any other port/domain needs
-  adding there first. Expect the app bar (title `原神资料站`), a top nav with **表情包 / 地图**, and — on the emoji
-  tab — the language menu plus a horizontally scrolling strip of **51 pack tabs** with the active one underlined,
-  **16** emoji per pack with captions, images from `…/binary/Texture2D/`, and the
+  adding there first. Expect the app bar (title `原神资料站`), a nav with **表情包** (`` `/` ``) and **地图**
+  (`/map`), and — on the emoji page — the language menu plus a horizontally scrolling strip of **51 pack tabs**
+  with the active one underlined, **16** emoji per pack with captions, images from `…/binary/Texture2D/`, and the
   `n / 827 个表情 · m / 51 个包` counter. Clicking a tab, picking a language and typing in the search field must each
   update tabs + panel + counter (search matches text, icon name or pack name), `←`/`→` must move to the previous/next
   pack and focus it, and the page must render Material 3 dark **even when the OS is in light mode** (the built
-  `index.html` carries the vars — look for `:root:root{`). The 地图 tab draws the region fitted into a canvas
-  (drag to pan, wheel to zoom around the cursor, double-click to zoom in) with a panel showing the region picker,
-  the level in px/cell and the resident-tile count; switching region refits, and a tile that is still downloading
-  must never show as a blank frame — its coarser ancestor paints instead.
-  Without a browser: `pnpm site:build` must succeed, and the built bundle must contain the tile URL shape
-  (`binary/MapTile`) and the manifest URL (`formatted/map.json`); `grep -o ':root:root{' .output/public/index.html`
-  proves the theme survived.
+  `index.html` carries the vars — look for `:root:root{`). The map page (`/map`, reachable directly — the built
+  output has `map/index.html`) draws the region fitted into a canvas (drag to pan, wheel to zoom around the cursor,
+  double-click to zoom in) with a panel showing the region picker, the level in px/cell and the resident-tile count;
+  switching region refits, and a tile that is still downloading must never show as a blank frame — its coarser
+  ancestor paints instead.
+  Without a browser: `pnpm site:build` must succeed and emit `.output/public/{index,200,404}.html` plus
+  `map/index.html`; the map page's lazy chunk must contain the tile URL shape (`binary/MapTile`) and the manifest URL
+  (`formatted/map.json`), the emoji page's chunk `formatted/emoji.json`, and `grep -o ':root:root{'` on any of those
+  HTML files proves the theme survived.
 - Symptoms that look like bugs but are not: `akasha export` over an already-populated tree prints
   `Nothing exported. N assets skipped (not extractable or files already exist)` even when it did write a file (the
   summary counts matched assets, not writes — verified by deleting one PNG: 2792 files, re-run, 2793 files, same

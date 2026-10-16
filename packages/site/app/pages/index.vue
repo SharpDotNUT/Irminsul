@@ -1,5 +1,5 @@
 <script setup lang="ts">
-/** 表情包浏览：从 `Static/GI/formatted/emoji.json` + `texts/<语言>.json` + `binary/Texture2D/*.png` 读。 */
+/** 表情包页（`/`）：从 `Static/GI/formatted/emoji.json` + `texts/<语言>.json` + `binary/Texture2D/*.png` 读。 */
 
 /** `Static/GI/formatted/emoji.json` 的形态（文案仍是 hash 引用）。 */
 type RawConfig = {

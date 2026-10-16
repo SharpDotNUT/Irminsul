@@ -24,6 +24,7 @@ body {
   font: inherit;
   font-weight: 500;
   color: var(--color-on-surface-variant);
+  text-decoration: none;
   background: none;
   border: 0;
   border-bottom: 3px solid transparent;
